@@ -1,0 +1,30 @@
+03-26 10:00:00.123  1234  5678 D MyActivity: onCreate
+03-26 10:00:01.456  1234  5678 I MyService : Starting service
+02-15 10:00:00.123 12345 12345 E AndroidRuntime: FATAL EXCEPTION: main
+02-15 10:00:00.123 12345 12345 E AndroidRuntime: Process: com.example.app, PID: 12345
+02-15 10:00:00.123 12345 12345 E AndroidRuntime: java.lang.RuntimeException: Unable to start activity ComponentInfo{com.example.app/com.example.app.MainActivity}: java.lang.NullPointerException
+02-15 10:00:00.123 12345 12345 E AndroidRuntime: 	at android.app.ActivityThread.performLaunchActivity(ActivityThread.java:2665)
+02-15 10:00:00.123 12345 12345 E AndroidRuntime: 	at android.app.ActivityThread.handleLaunchActivity(ActivityThread.java:2726)
+03-26 10:00:02.789     0     0 W Kernel   : Low memory
+03-26 10:00:03.000  2345  6789 E AnotherApp: An error occurred
+Invalid line format
+03-26 10:00:04.111  3456  7890 F CriticalComponent: Fatal error, crashing
+02-15 11:00:00.456  1001  1025 E ActivityManager: ANR in com.example.slowapp (com.example.slowapp/.MyActivity)
+02-15 11:05:00.123  1001  1025 W ActivityManager: ANR in com.another.app (com.another.app/.MainActivity), reason: Input dispatching timed out
+02-15 11:10:00.789  1001  1025 E ActivityManager: ANR in com.example.stuckapp
+02-15 11:10:00.789  1001  1025 E ActivityManager: Reason: Broadcast timeout
+02-15 11:10:00.789  1001  1025 E ActivityManager: CPU usage from 5000ms to 0ms ago:
+03-01 10:30:05.123 12345 12345 F DEBUG   : *** *** *** *** *** *** *** *** *** *** *** *** *** *** *** ***
+03-01 10:30:05.124 12345 12345 F DEBUG   : Fatal signal 11 (SIGSEGV), code 1 (SEGV_MAPERR), fault addr 0xdeadbeef in tid 12345 (crasher_thread), pid 12345 (com.example.nativecrash)
+03-01 10:35:10.456 5678 5678 E libc    : FORTIFY: pthread_mutex_destroy called on a locked mutex (0x12345678)
+03-01 10:35:10.457 5678 5678 F libc    : Fatal signal 6 (SIGABRT), code -1 (SI_QUEUE) in tid 5678 (some_thread), pid 5678 (another.app)
+03-02 11:00:00.123     0     0 E kernel  : Kernel panic - not syncing: Attempted to kill init!
+03-02 11:05:00.456   123   456 W Watchdog: --- WATCHDOG EARLY WARNING ---
+03-02 11:05:30.789   123   456 E Watchdog: !@SyncMonitor: Watchdog triggered
+03-02 11:05:30.789   123   456 E Watchdog: Blocked msg is input dispatching to com.example.app
+03-02 11:10:00.111     0     0 E kernel  : Unable to handle kernel NULL pointer dereference at virtual address 00000000
+03-02 11:10:00.111     0     0 E kernel  : Oops: 0000 [#1] PREEMPT SMP
+03-02 11:15:00.000  1000  1000 E SystemServer: System server crashed!
+03-02 11:20:00.000  1002  1002 E ModemManager: Modem crashed, attempting recovery.
+03-26 10:00:05.222        9012 V VerboseTag: This is a verbose message
+03-26 10:00:06.333  4567  8901 D : Empty tag message
