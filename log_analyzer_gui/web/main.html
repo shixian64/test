@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Log Analyzer GUI</title>
+    <link rel="stylesheet" type="text/css" href="style.css">
+    <script type="text/javascript" src="/eel.js"></script>
+</head>
+<body>
+    <div class="container">
+        <h1>Android Log Analyzer</h1>
+        
+        <div class="file-input-section">
+            <button id="selectFileBtn">Select Log File</button>
+            <input type="file" id="actualFileInput" style="display: none;" accept=".txt,.log">
+            <p id="selectedFileInfo">No file selected.</p>
+        </div>
+
+        <div class="analysis-status-section">
+            <p id="analysisStatus"></p>
+        </div>
+
+        <div id="resultsSection" style="display: none;">
+            <h2>Analysis Results</h2>
+            
+            <h3>Summary</h3>
+            <div id="summaryStats"></div>
+            
+            <h3>Detailed Issues</h3>
+            <div id="detailedIssuesTableContainer">
+                <!-- Table will be generated here by JavaScript -->
+            </div>
+        </div>
+
+        <!-- Modal for displaying issue details -->
+        <div id="issueDetailModal" class="modal" style="display:none;">
+            <div class="modal-content">
+                <span class="close-button" onclick="closeModal()">&times;</span>
+                <h3>Issue Details</h3>
+                <pre id="issueDetailContent"></pre>
+            </div>
+        </div>
+    </div>
+
+    <script type="text/javascript" src="script.js"></script>
+</body>
+</html>

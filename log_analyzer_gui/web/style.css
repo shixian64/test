@@ -1,0 +1,177 @@
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    margin: 0;
+    padding: 20px; 
+    background-color: #f0f2f5;
+    color: #333;
+    min-height: 100vh;
+}
+.container {
+    background-color: #fff;
+    padding: 20px 30px; 
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    width: 90%;
+    max-width: 800px; 
+    text-align: center;
+    margin: 20px auto; 
+}
+h1 {
+    color: #1877f2; 
+    margin-bottom: 25px;
+}
+.file-input-section button {
+    padding: 12px 20px;
+    background-color: #1877f2;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 16px;
+    transition: background-color 0.3s ease;
+}
+.file-input-section button:hover {
+    background-color: #166fe5;
+}
+/* Added disabled state styling */
+.file-input-section button:disabled, 
+.file-input-section button.button-disabled { /* Added class for JS control if needed */
+    background-color: #ccc;
+    cursor: not-allowed;
+    opacity: 0.7;
+}
+
+#selectedFileInfo {
+    margin-top: 15px;
+    color: #555;
+    min-height: 20px; 
+}
+.analysis-status-section p {
+    margin-top: 15px;
+    font-weight: bold;
+    min-height: 20px; 
+}
+/* Status message styling */
+.status-info {
+    color: #0056b3; /* Blue for info */
+}
+.status-success {
+    color: #28a745; /* Green for success */
+}
+.status-error {
+    color: #dc3545; /* Red for error */
+    font-weight: bold;
+}
+
+
+#resultsSection {
+     margin-top: 20px;
+     padding: 15px;
+     background-color: #f9f9f9;
+     border: 1px solid #e0e0e0;
+     border-radius: 6px;
+     text-align: left;
+}
+#resultsSection h2, #resultsSection h3 {
+     margin-top: 0;
+     margin-bottom: 10px;
+     color: #333;
+}
+#resultsSection h3 {
+    font-size: 1.1em;
+    margin-top: 15px;
+}
+
+#summaryStats ul {
+    list-style-type: none;
+    padding-left: 0;
+}
+#summaryStats li {
+    margin-bottom: 5px;
+    font-size: 1em;
+}
+/* Styling for empty state messages */
+.empty-state-message {
+    color: #555;
+    font-style: italic;
+    text-align: center;
+    padding: 10px;
+}
+
+
+#detailedIssuesTableContainer table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 10px;
+    font-size: 0.9em;
+}
+#detailedIssuesTableContainer th, #detailedIssuesTableContainer td {
+    border: 1px solid #ddd;
+    padding: 8px;
+    text-align: left;
+}
+#detailedIssuesTableContainer th {
+    background-color: #e9ecef;
+    font-weight: bold;
+}
+/* Added hover effect for table rows */
+#detailedIssuesTableContainer tr:hover {
+    background-color: #f0f0f0; 
+    cursor: pointer;
+}
+
+/* Modal Styles */
+.modal {
+    display: none; 
+    position: fixed; 
+    z-index: 1000; 
+    left: 0;
+    top: 0;
+    width: 100%; 
+    height: 100%; 
+    overflow: auto; 
+    background-color: rgba(0,0,0,0.5); 
+}
+.modal-content {
+    background-color: #fefefe;
+    margin: 10% auto; 
+    padding: 25px;
+    border: 1px solid #888;
+    width: 80%; 
+    max-width: 600px;
+    border-radius: 8px;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+    position: relative;
+}
+.close-button {
+    color: #aaa;
+    float: right; 
+    font-size: 28px;
+    font-weight: bold;
+    position: absolute; 
+    top: 10px;
+    right: 20px;
+}
+.close-button:hover,
+.close-button:focus {
+    color: black;
+    text-decoration: none;
+    cursor: pointer;
+}
+#issueDetailModal h3 {
+    margin-top: 0;
+    color: #1877f2;
+}
+/* Ensured modal content is scrollable */
+#issueDetailContent {
+    white-space: pre-wrap; 
+    font-family: "Courier New", Courier, monospace;
+    font-size: 13px;
+    color: #222;
+    max-height: 400px; 
+    overflow-y: auto; 
+    background-color: #f9f9f9; /* Changed from #fff for slight contrast */
+    padding: 10px;
+    border-radius: 4px;
+    border: 1px solid #ddd; /* Changed from #eee for slightly more definition */
+}

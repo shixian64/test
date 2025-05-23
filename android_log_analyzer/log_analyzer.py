@@ -352,79 +352,99 @@ def read_log_file(filepath, issue_patterns_config):
             
     return detected_issues
 
+def get_structured_report_data(detected_issues):
+    """
+    Processes a list of detected issues and returns a structured dictionary.
+
+    Args:
+        detected_issues (list): A list of issue dictionaries.
+
+    Returns:
+        dict: A dictionary containing 'summary_counts' and 'detailed_issues'.
+    """
+    summary_counts = Counter(issue["type"] for issue in detected_issues)
+    
+    detailed_issues_list = []
+    for issue_dict in detected_issues:
+        # Create a clean representation, converting LogEntry to string
+        clean_issue = {
+            "type": issue_dict.get("type"),
+            "trigger_line_str": str(issue_dict.get("trigger_line")),
+            # Include other relevant fields, ensuring they are serializable
+            "process_name": issue_dict.get("process_name"), 
+            "reason": issue_dict.get("reason"),
+            "signal_info": issue_dict.get("signal_info"),
+            "process_info": issue_dict.get("process_info"),
+            "error_subtype": issue_dict.get("error_subtype"), 
+        }
+        # Remove keys with None values for cleaner output, if desired
+        clean_issue = {k: v for k, v in clean_issue.items() if v is not None}
+        detailed_issues_list.append(clean_issue)
+        
+    return {
+        "summary_counts": dict(summary_counts), # Convert Counter to dict for broader compatibility
+        "detailed_issues": detailed_issues_list
+    }
+
 def generate_report(detected_issues):
     """
-    Generates and prints a structured textual report from the list of detected issues.
-
-    The report includes a summary of issue counts and detailed information for each
-    detected issue.
+    Generates and prints a structured textual report from the list of detected issues,
+    using get_structured_report_data for data preparation.
 
     Args:
         detected_issues (list): A list of issue dictionaries returned by the analyzer functions.
     """
-    # Import Counter here to keep it local to this function if not used elsewhere globally.
-    
+    report_data = get_structured_report_data(detected_issues)
+    summary_counts = report_data["summary_counts"]
+    detailed_issues_list = report_data["detailed_issues"]
+
     print("\nLog Analysis Report")
     print("===================")
 
-    if not detected_issues:
+    if not detected_issues: # Or check if not detailed_issues_list
         print("No issues detected.")
         print("===================")
         return
 
     # --- Summary Section ---
-    issue_types = [issue["type"] for issue in detected_issues]
-    issue_counts = Counter(issue_types)
-
-    # Specifically count subtypes for SystemError for a more detailed summary
-    system_error_subtypes = [
-        issue["error_subtype"] for issue in detected_issues if issue["type"] == "SystemError"
-    ]
-    system_error_subtype_counts = Counter(system_error_subtypes)
+    # Re-calculate system error subtypes for CLI summary, or pass it through get_structured_report_data
+    system_error_subtypes_counts = Counter(
+        issue["error_subtype"] for issue in detailed_issues_list 
+        if issue["type"] == "SystemError" and "error_subtype" in issue
+    )
 
     print("Summary:")
-    print(f"  Java Crashes: {issue_counts.get('JavaCrash', 0)}")
-    print(f"  ANRs: {issue_counts.get('ANR', 0)}")
-    print(f"  Native Crash Hints: {issue_counts.get('NativeCrashHint', 0)}")
-    print(f"  System Errors: {issue_counts.get('SystemError', 0)}")
-    if issue_counts.get('SystemError', 0) > 0:
-        for subtype, count in sorted(system_error_subtype_counts.items()): # Sorted for consistent order
+    print(f"  Java Crashes: {summary_counts.get('JavaCrash', 0)}")
+    print(f"  ANRs: {summary_counts.get('ANR', 0)}")
+    print(f"  Native Crash Hints: {summary_counts.get('NativeCrashHint', 0)}")
+    print(f"  System Errors: {summary_counts.get('SystemError', 0)}")
+    if summary_counts.get('SystemError', 0) > 0:
+        for subtype, count in sorted(system_error_subtypes_counts.items()):
             print(f"    - {subtype}: {count}")
     print("===================")
     
     # --- Details Section ---
     print("Details:")
 
-    # Helper to number each type of issue in the detailed report
     issue_number_tracker = {} 
-    for issue in detected_issues:
+    for issue in detailed_issues_list:
         issue_type = issue["type"]
         issue_number_tracker[issue_type] = issue_number_tracker.get(issue_type, 0) + 1
         
         print(f"\n--- {issue_type} #{issue_number_tracker[issue_type]} ---")
         
-        # Print details based on the type of issue
-        if issue_type == "JavaCrash":
-            print(f"  Trigger: {issue['trigger_line']}")
-        elif issue_type == "ANR":
-            print(f"  Process: {issue.get('process_name', 'N/A')}") # Use .get for safety
+        # Print details from the already processed 'issue' dictionary
+        print(f"  Trigger: {issue.get('trigger_line_str', 'N/A')}")
+        if issue_type == "ANR":
+            print(f"  Process: {issue.get('process_name', 'N/A')}")
             print(f"  Reason: {issue.get('reason', 'N/A')}")
-            print(f"  Trigger: {issue['trigger_line']}")
         elif issue_type == "NativeCrashHint":
             print(f"  Signal: {issue.get('signal_info', 'N/A')}")
             print(f"  Process Info: {issue.get('process_info', 'N/A')}")
-            print(f"  Trigger: {issue['trigger_line']}")
         elif issue_type == "SystemError":
             print(f"  Subtype: {issue.get('error_subtype', 'N/A')}")
-            print(f"  Trigger: {issue['trigger_line']}")
-        else:
-            # Generic fallback for any other unforeseen issue types
-            for key, value in issue.items():
-                # Ensure LogEntry objects (like trigger_line) are printed via their __str__
-                if key == "trigger_line": 
-                    print(f"  {key.replace('_', ' ').title()}: {value}")
-                else:
-                    print(f"  {key.replace('_', ' ').title()}: {str(value)}") # Explicit str() for other values
+        # Other specific fields can be added if needed
+        
     print("\n===================")
 
 
