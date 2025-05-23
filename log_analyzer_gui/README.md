@@ -1,3 +1,7 @@
+[阅读中文文档 (Read this document in Chinese)](README_zh-CN.md)
+
+---
+
 # Android Log Analyzer GUI
 
 A user-friendly graphical interface for the Android Log Analyzer tool, built with Electron and Python (using the Eel library). This application allows users to easily select Android log files, analyze them for common issues, and view the results in a structured format.
