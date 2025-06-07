@@ -14,6 +14,12 @@ pip install -e .
 android-log-analyzer path/to/logcat.log
 ```
 
+To also save the results as JSON, specify an output file:
+
+```bash
+android-log-analyzer path/to/logcat.log --json-output report.json
+```
+
 ### GUI
 To start the GUI you need `node` and the Python `eel` package.
 From the `log_analyzer_gui` directory run:

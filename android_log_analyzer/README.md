@@ -41,11 +41,13 @@ python android_log_analyzer/log_analyzer.py <path_to_your_logfile> [options]
 ```bash
 python android_log_analyzer/log_analyzer.py my_android_logs.txt
 python android_log_analyzer/log_analyzer.py an_mtk_log.txt -p mtk
+python android_log_analyzer/log_analyzer.py mylog.txt --json-output result.json
 ```
 
 ## Output
 
 The script outputs a structured report to the console:
+If ``--json-output`` is provided, the same data is also written to the specified JSON file.
 
 1.  **Summary**:
     *   Total counts for each major issue type (Java Crashes, ANRs, Native Crash Hints, System Errors).

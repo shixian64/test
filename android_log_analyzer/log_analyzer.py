@@ -379,6 +379,19 @@ def get_structured_report_data(detected_issues):
         "detailed_issues": detailed_issues_list
     }
 
+def save_report_to_json(detected_issues, output_path):
+    """Save the structured report data to a JSON file.
+
+    Args:
+        detected_issues (list): Issues returned by ``read_log_file``.
+        output_path (str): Path to the JSON file to be written.
+    """
+    import json
+
+    report_data = get_structured_report_data(detected_issues)
+    with open(output_path, "w", encoding="utf-8") as f:
+        json.dump(report_data, f, indent=2, ensure_ascii=False)
+
 def generate_report(detected_issues):
     """
     Generates and prints a structured textual report from the list of detected issues,
@@ -462,6 +475,11 @@ def main(argv=None):
             "Default: google."
         ),
     )
+    parser.add_argument(
+        "--json-output",
+        "-j",
+        help="Optional path to save the analysis results as JSON",
+    )
     args = parser.parse_args(argv)
 
     # Placeholder for platform-specific logic (not yet implemented)
@@ -470,6 +488,14 @@ def main(argv=None):
     )
 
     detected_issues = read_log_file(args.logfile, ISSUE_PATTERNS)
+
+    if args.json_output:
+        try:
+            save_report_to_json(detected_issues, args.json_output)
+            print(f"JSON report written to {args.json_output}")
+        except Exception as e:
+            print(f"Error writing JSON report: {e}")
+
     generate_report(detected_issues)
 
 
