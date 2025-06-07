@@ -4,3 +4,4 @@
 Invalid line format
 03-01 10:30:05.124 12345 12345 F DEBUG   : Fatal signal 11 (SIGSEGV), code 1 (SEGV_MAPERR), fault addr 0xdeadbeef in tid 12345 (crasher_thread), pid 12345 (com.example.nativecrash)
 03-02 11:00:00.123     0     0 E kernel  : Kernel panic - not syncing: Attempted to kill init!
+03-26 10:05:00.000  1234  1234 I lowmemorykiller: Killing 'com.example.memtest' (12345) to free 10240kB memory
