@@ -11,6 +11,8 @@ pip install -e .
 android-log-analyzer path/to/logcat.log
 ```
 
+同样可以传入目录路径，工具会递归扫描其中的 `.log`、`.txt`、`.gz` 和 `.zip` 文件。
+
 如需将结果保存为 JSON，可指定输出文件：
 ```bash
 android-log-analyzer path/to/logcat.log --json-output report.json

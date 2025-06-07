@@ -14,6 +14,9 @@ pip install -e .
 android-log-analyzer path/to/logcat.log
 ```
 
+You can also provide a directory instead of a single file. The analyzer
+will recursively scan for `.log`, `.txt`, `.gz` and `.zip` files.
+
 To also save the results as JSON, specify an output file:
 
 ```bash
