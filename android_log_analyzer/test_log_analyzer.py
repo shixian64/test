@@ -1,5 +1,12 @@
 import unittest
-from .log_analyzer import LogEntry, parse_log_line, ISSUE_PATTERNS
+import os
+from collections import Counter
+from .log_analyzer import (
+    LogEntry,
+    parse_log_line,
+    ISSUE_PATTERNS,
+    read_log_file,
+)
 from .log_analyzer import analyze_java_crash, analyze_anr, analyze_native_crash_hint, analyze_system_error
 
 class TestLogParsing(unittest.TestCase):
@@ -233,6 +240,17 @@ class TestIssueAnalyzers(unittest.TestCase):
         self.assertIsNotNone(log_entry)
         result = analyze_system_error(log_entry)
         self.assertIsNone(result)
+
+
+class TestReadLogFile(unittest.TestCase):
+    def test_read_log_file_counts(self):
+        log_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "test.log")
+        detected = read_log_file(log_path, ISSUE_PATTERNS)
+        counts = Counter(issue["type"] for issue in detected)
+        self.assertEqual(counts.get("JavaCrash", 0), 1)
+        self.assertEqual(counts.get("ANR", 0), 1)
+        self.assertEqual(counts.get("NativeCrashHint", 0), 1)
+        self.assertEqual(counts.get("SystemError", 0), 1)
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)
