@@ -2,12 +2,15 @@ import unittest
 import os
 import tempfile
 import json
+import gzip
+import shutil
 from collections import Counter
 from .log_analyzer import (
     LogEntry,
     parse_log_line,
     ISSUE_PATTERNS,
     read_log_file,
+    read_logs_from_directory,
 )
 from .log_analyzer import (
     analyze_java_crash,
@@ -296,6 +299,33 @@ class TestJsonOutput(unittest.TestCase):
             self.assertIn("detailed_issues", data)
         finally:
             os.remove(tmp_path)
+
+class TestExtendedReading(unittest.TestCase):
+    def test_read_log_file_gzip(self):
+        log_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "test.log")
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".gz") as tmp:
+            with gzip.open(tmp.name, "wt", encoding="utf-8") as gz, open(log_path, "r", encoding="utf-8") as src:
+                gz.write(src.read())
+            tmp_path = tmp.name
+        try:
+            detected = read_log_file(tmp_path, ISSUE_PATTERNS)
+            counts = Counter(issue["type"] for issue in detected)
+            self.assertEqual(counts.get("JavaCrash", 0), 1)
+        finally:
+            os.remove(tmp_path)
+
+    def test_read_logs_from_directory(self):
+        log_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "test.log")
+        temp_dir = tempfile.mkdtemp()
+        try:
+            os.makedirs(os.path.join(temp_dir, "sub"), exist_ok=True)
+            shutil.copy(log_path, os.path.join(temp_dir, "first.log"))
+            shutil.copy(log_path, os.path.join(temp_dir, "sub", "second.log"))
+            detected = read_logs_from_directory(temp_dir, ISSUE_PATTERNS)
+            counts = Counter(issue["type"] for issue in detected)
+            self.assertEqual(counts.get("JavaCrash", 0), 2)
+        finally:
+            shutil.rmtree(temp_dir)
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)

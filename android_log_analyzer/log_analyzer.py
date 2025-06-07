@@ -10,6 +10,7 @@ and generates a summary report of its findings.
 """
 import re
 import argparse # For command-line interface
+import os
 from collections import Counter # For summarizing issues
 
 # --- Configuration for Issue Detection ---
@@ -176,6 +177,27 @@ def parse_log_line(line):
         )
     return None
 
+def iter_log_lines(filepath):
+    """Yield log lines from plain text or compressed files (.gz or .zip)."""
+    import gzip
+    import zipfile
+    if filepath.lower().endswith(".gz"):
+        with gzip.open(filepath, "rt", encoding="utf-8", errors="ignore") as f:
+            for line in f:
+                yield line
+    elif filepath.lower().endswith(".zip"):
+        with zipfile.ZipFile(filepath) as z:
+            for name in z.namelist():
+                if not name.lower().endswith((".log", ".txt")):
+                    continue
+                with z.open(name) as f:
+                    for line in f:
+                        yield line.decode("utf-8", errors="ignore")
+    else:
+        with open(filepath, "r", encoding="utf-8", errors="ignore") as f:
+            for line in f:
+                yield line
+
 def analyze_java_crash(log_entry):
     """
     Analyzes a LogEntry to detect Java crashes based on defined patterns.
@@ -339,41 +361,54 @@ def read_log_file(filepath, issue_patterns_config):
     """
     detected_issues = []
     try:
-        with open(filepath, "r", encoding="utf-8", errors="ignore") as f:
-            for line_number, line_content in enumerate(f, 1):
-                line = line_content.strip()
-                if not line:
-                    continue  # Skip empty lines
+        for line_number, line_content in enumerate(iter_log_lines(filepath), 1):
+            line = line_content.strip()
+            if not line:
+                continue  # Skip empty lines
 
-                log_entry = parse_log_line(line)
-                if not log_entry:
-                    print(f"Warning: Could not parse line #{line_number}: {line}")
-                    continue
+            log_entry = parse_log_line(line)
+            if not log_entry:
+                print(f"Warning: Could not parse line #{line_number}: {line}")
+                continue
 
-                java_crash_info = analyze_java_crash(log_entry)
-                if java_crash_info:
-                    detected_issues.append(java_crash_info)
+            java_crash_info = analyze_java_crash(log_entry)
+            if java_crash_info:
+                detected_issues.append(java_crash_info)
 
-                anr_info = analyze_anr(log_entry)
-                if anr_info:
-                    detected_issues.append(anr_info)
+            anr_info = analyze_anr(log_entry)
+            if anr_info:
+                detected_issues.append(anr_info)
 
-                native_crash_info = analyze_native_crash_hint(log_entry)
-                if native_crash_info:
-                    detected_issues.append(native_crash_info)
+            native_crash_info = analyze_native_crash_hint(log_entry)
+            if native_crash_info:
+                detected_issues.append(native_crash_info)
 
-                system_error_info = analyze_system_error(log_entry)
-                if system_error_info:
-                    detected_issues.append(system_error_info)
+            system_error_info = analyze_system_error(log_entry)
+            if system_error_info:
+                detected_issues.append(system_error_info)
 
-                memory_issue_info = analyze_memory_issue(log_entry)
-                if memory_issue_info:
-                    detected_issues.append(memory_issue_info)
+            memory_issue_info = analyze_memory_issue(log_entry)
+            if memory_issue_info:
+                detected_issues.append(memory_issue_info)
     except FileNotFoundError:
         print(f"Error: File not found at path: {filepath}")
         return detected_issues
+    except Exception as e:
+        print(f"Error reading file {filepath}: {e}")
+        return detected_issues
 
     return detected_issues
+
+def read_logs_from_directory(directory, issue_patterns_config):
+    """Recursively read all log files within ``directory``."""
+    import os
+    all_issues = []
+    for root, _, files in os.walk(directory):
+        for name in files:
+            if name.lower().endswith((".log", ".txt", ".gz", ".zip")):
+                file_path = os.path.join(root, name)
+                all_issues.extend(read_log_file(file_path, issue_patterns_config))
+    return all_issues
 
 def get_structured_report_data(detected_issues):
     """
@@ -500,7 +535,10 @@ def main(argv=None):
     )
     parser.add_argument(
         "logfile",
-        help="Path to the Android log file to analyze.",
+        help=(
+            "Path to a log file or a directory containing log files.\n"
+            "Compressed .gz or .zip files are also supported."
+        ),
     )
     parser.add_argument(
         "--platform",
@@ -525,7 +563,10 @@ def main(argv=None):
         f"Info: Analyzing for platform '{args.platform}'. (Note: Platform-specific patterns are a future enhancement.)"
     )
 
-    detected_issues = read_log_file(args.logfile, ISSUE_PATTERNS)
+    if os.path.isdir(args.logfile):
+        detected_issues = read_logs_from_directory(args.logfile, ISSUE_PATTERNS)
+    else:
+        detected_issues = read_log_file(args.logfile, ISSUE_PATTERNS)
 
     if args.json_output:
         try:
