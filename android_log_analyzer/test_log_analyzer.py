@@ -1,5 +1,7 @@
 import unittest
 import os
+import tempfile
+import json
 from collections import Counter
 from .log_analyzer import (
     LogEntry,
@@ -7,7 +9,13 @@ from .log_analyzer import (
     ISSUE_PATTERNS,
     read_log_file,
 )
-from .log_analyzer import analyze_java_crash, analyze_anr, analyze_native_crash_hint, analyze_system_error
+from .log_analyzer import (
+    analyze_java_crash,
+    analyze_anr,
+    analyze_native_crash_hint,
+    analyze_system_error,
+    save_report_to_json,
+)
 
 class TestLogParsing(unittest.TestCase):
 
@@ -251,6 +259,24 @@ class TestReadLogFile(unittest.TestCase):
         self.assertEqual(counts.get("ANR", 0), 1)
         self.assertEqual(counts.get("NativeCrashHint", 0), 1)
         self.assertEqual(counts.get("SystemError", 0), 1)
+
+
+class TestJsonOutput(unittest.TestCase):
+    def test_save_report_to_json(self):
+        sample_issues = [
+            {"type": "JavaCrash", "trigger_line": LogEntry("t", 1, 1, "E", "Tag", "msg")}
+        ]
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".json") as tmp:
+            tmp_path = tmp.name
+
+        try:
+            save_report_to_json(sample_issues, tmp_path)
+            with open(tmp_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            self.assertIn("summary_counts", data)
+            self.assertIn("detailed_issues", data)
+        finally:
+            os.remove(tmp_path)
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)
