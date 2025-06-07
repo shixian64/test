@@ -311,45 +311,38 @@ def read_log_file(filepath, issue_patterns_config):
         list: A list of dictionaries, where each dictionary represents a detected issue.
               Returns an empty list if the file is not found or no issues are detected.
     """
-    log_entries = []
     detected_issues = []
     try:
-        with open(filepath, 'r', encoding='utf-8', errors='ignore') as f: # Added encoding and error handling
+        with open(filepath, "r", encoding="utf-8", errors="ignore") as f:
             for line_number, line_content in enumerate(f, 1):
                 line = line_content.strip()
                 if not line:
-                    continue # Skip empty lines
-                
+                    continue  # Skip empty lines
+
                 log_entry = parse_log_line(line)
-                if log_entry:
-                    log_entries.append(log_entry)
-                else:
-                    # Optionally, keep track of unparseable lines or log them.
-                    # For now, printing a warning is consistent with previous behavior.
-                    print(f"Warning: Could not parse line #{line_number}: {line}") 
+                if not log_entry:
+                    print(f"Warning: Could not parse line #{line_number}: {line}")
+                    continue
+
+                java_crash_info = analyze_java_crash(log_entry)
+                if java_crash_info:
+                    detected_issues.append(java_crash_info)
+
+                anr_info = analyze_anr(log_entry)
+                if anr_info:
+                    detected_issues.append(anr_info)
+
+                native_crash_info = analyze_native_crash_hint(log_entry)
+                if native_crash_info:
+                    detected_issues.append(native_crash_info)
+
+                system_error_info = analyze_system_error(log_entry)
+                if system_error_info:
+                    detected_issues.append(system_error_info)
     except FileNotFoundError:
         print(f"Error: File not found at path: {filepath}")
-        return detected_issues # Return empty list
+        return detected_issues
 
-    # Analyze the collected log entries for various issues
-    # Each analyzer function uses the global ISSUE_PATTERNS
-    for entry in log_entries:
-        java_crash_info = analyze_java_crash(entry)
-        if java_crash_info:
-            detected_issues.append(java_crash_info)
-        
-        anr_info = analyze_anr(entry)
-        if anr_info:
-            detected_issues.append(anr_info)
-
-        native_crash_info = analyze_native_crash_hint(entry)
-        if native_crash_info:
-            detected_issues.append(native_crash_info)
-        
-        system_error_info = analyze_system_error(entry)
-        if system_error_info:
-            detected_issues.append(system_error_info)
-            
     return detected_issues
 
 def get_structured_report_data(detected_issues):
