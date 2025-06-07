@@ -448,32 +448,37 @@ def generate_report(detected_issues):
     print("\n===================")
 
 
-if __name__ == "__main__":
-    # Setup command-line argument parsing
+def main(argv=None):
+    """Command line entry point for the log analyzer."""
     parser = argparse.ArgumentParser(
         description="Analyze Android log files for common critical issues.",
-        formatter_class=argparse.RawTextHelpFormatter # To allow for better formatting in help
+        formatter_class=argparse.RawTextHelpFormatter,
     )
     parser.add_argument(
-        "logfile", 
-        help="Path to the Android log file to analyze."
+        "logfile",
+        help="Path to the Android log file to analyze.",
     )
     parser.add_argument(
-        "--platform", "-p", 
-        choices=["google", "mtk", "sprd"], 
-        default="google", 
-        help="Specify the platform type for potentially loading platform-specific patterns.\n"
-             "Currently, this option is a placeholder for future enhancements.\n"
-             "Default: google."
+        "--platform",
+        "-p",
+        choices=["google", "mtk", "sprd"],
+        default="google",
+        help=(
+            "Specify the platform type for potentially loading platform-specific patterns.\n"
+            "Currently, this option is a placeholder for future enhancements.\n"
+            "Default: google."
+        ),
     )
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     # Placeholder for platform-specific logic (not yet implemented)
-    # In the future, `args.platform` could be used to load different ISSUE_PATTERNS.
-    print(f"Info: Analyzing for platform '{args.platform}'. (Note: Platform-specific patterns are a future enhancement.)")
+    print(
+        f"Info: Analyzing for platform '{args.platform}'. (Note: Platform-specific patterns are a future enhancement.)"
+    )
 
-    # Process the log file and generate the report
-    # ISSUE_PATTERNS is passed, though analyzers currently access the global one.
-    # This allows future flexibility if ISSUE_PATTERNS were to be modified based on platform.
     detected_issues = read_log_file(args.logfile, ISSUE_PATTERNS)
     generate_report(detected_issues)
+
+
+if __name__ == "__main__":
+    main()
