@@ -264,7 +264,7 @@ def analyze_native_crash_hint(log_entry):
             # Only return if a specific detail (like signal or process info) was actually extracted.
             # This avoids flagging generic lines from DEBUG/libc tags as native crashes without more evidence.
             if found_specific_detail:
-                 return extracted_data
+                return extracted_data
     return None
 
 
