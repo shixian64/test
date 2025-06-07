@@ -48,7 +48,7 @@ ISSUE_PATTERNS = {
     "native_crash_hint": {
         "tags": ["DEBUG", "libc", "bionic"], # Tags often associated with native crashes
         # Keywords indicating a native crash (e.g., signal info or crash dump header)
-        "message_keywords": ["Fatal signal", "*** ***"], 
+        "message_keywords": ["Fatal signal", "*** ***"],
         "extractors": {
             # Regex to capture signal information (e.g., "Fatal signal 11 (SIGSEGV)")
             "signal_info": r"(Fatal signal \d+ \(SIG[A-Z]+\)|signal \d+ \(SIG[A-Z]+\))",
@@ -56,9 +56,17 @@ ISSUE_PATTERNS = {
             "process_info": r"(pid: \d+, tid: \d+, name: [^ ]+ >>> [^ ]+ <<<|pid: \d+, tid: \d+, name: [^ ]+)"
         }
     },
+    "memory_issue": {
+        "tags": ["lowmemorykiller", "ActivityManager", "kernel"],
+        "message_keywords": ["Low memory", "low memory", "Out of memory", "Killed process", "Killing"],
+        "extractors": {
+            "killed_process": r"(?:Killed process \d+ \(([^)]+)\)|Killing '([^']+)')",
+            "oom_reason": r"(Out of memory|[Ll]ow memory)"
+        }
+    },
     "system_error": { # Grouping for various low-level system issues
         "kernel_panic": {
-            "tags": ["kernel"], 
+            "tags": ["kernel"],
             "message_keywords": ["Kernel panic", "BUG:", "Oops"] # Indicators of kernel issues
         },
         "watchdog": {
@@ -296,6 +304,24 @@ def analyze_system_error(log_entry):
                     return {"type": "SystemError", "error_subtype": error_subtype, "trigger_line": log_entry}
     return None
 
+def analyze_memory_issue(log_entry):
+    """Analyze a LogEntry for low-memory or OOM kill messages."""
+    patterns = ISSUE_PATTERNS["memory_issue"]
+    keyword_match = any(k.lower() in log_entry.message.lower() for k in patterns["message_keywords"])
+
+    if keyword_match:
+        issue = {"type": "MemoryIssue", "trigger_line": log_entry}
+        for key, regex in patterns.get("extractors", {}).items():
+            match = regex.search(log_entry.message)
+            if match:
+                # Regex might have multiple capture groups; pick the first non-empty
+                for grp in match.groups():
+                    if grp:
+                        issue[key] = grp.strip()
+                        break
+        return issue
+    return None
+
 def read_log_file(filepath, issue_patterns_config):
     """
     Reads a log file line by line, parses each line into a LogEntry object,
@@ -339,6 +365,10 @@ def read_log_file(filepath, issue_patterns_config):
                 system_error_info = analyze_system_error(log_entry)
                 if system_error_info:
                     detected_issues.append(system_error_info)
+
+                memory_issue_info = analyze_memory_issue(log_entry)
+                if memory_issue_info:
+                    detected_issues.append(memory_issue_info)
     except FileNotFoundError:
         print(f"Error: File not found at path: {filepath}")
         return detected_issues
@@ -368,7 +398,9 @@ def get_structured_report_data(detected_issues):
             "reason": issue_dict.get("reason"),
             "signal_info": issue_dict.get("signal_info"),
             "process_info": issue_dict.get("process_info"),
-            "error_subtype": issue_dict.get("error_subtype"), 
+            "error_subtype": issue_dict.get("error_subtype"),
+            "killed_process": issue_dict.get("killed_process"),
+            "oom_reason": issue_dict.get("oom_reason"),
         }
         # Remove keys with None values for cleaner output, if desired
         clean_issue = {k: v for k, v in clean_issue.items() if v is not None}
@@ -424,6 +456,7 @@ def generate_report(detected_issues):
     print(f"  ANRs: {summary_counts.get('ANR', 0)}")
     print(f"  Native Crash Hints: {summary_counts.get('NativeCrashHint', 0)}")
     print(f"  System Errors: {summary_counts.get('SystemError', 0)}")
+    print(f"  Memory Issues: {summary_counts.get('MemoryIssue', 0)}")
     if summary_counts.get('SystemError', 0) > 0:
         for subtype, count in sorted(system_error_subtypes_counts.items()):
             print(f"    - {subtype}: {count}")
@@ -449,6 +482,11 @@ def generate_report(detected_issues):
             print(f"  Process Info: {issue.get('process_info', 'N/A')}")
         elif issue_type == "SystemError":
             print(f"  Subtype: {issue.get('error_subtype', 'N/A')}")
+        elif issue_type == "MemoryIssue":
+            if 'killed_process' in issue:
+                print(f"  Killed Process: {issue.get('killed_process')}")
+            if 'oom_reason' in issue:
+                print(f"  Reason: {issue.get('oom_reason')}")
         # Other specific fields can be added if needed
         
     print("\n===================")

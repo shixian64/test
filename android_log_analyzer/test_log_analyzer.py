@@ -14,6 +14,7 @@ from .log_analyzer import (
     analyze_anr,
     analyze_native_crash_hint,
     analyze_system_error,
+    analyze_memory_issue,
     save_report_to_json,
 )
 
@@ -249,6 +250,23 @@ class TestIssueAnalyzers(unittest.TestCase):
         result = analyze_system_error(log_entry)
         self.assertIsNone(result)
 
+    # --- Memory Issue Tests ---
+    def test_memory_issue_detected_killer(self):
+        line = "03-26 10:05:00.000  1234  1234 I lowmemorykiller: Killing 'com.example.memtest' (12345) to free 10240kB memory"
+        log_entry = self._create_log_entry(line)
+        self.assertIsNotNone(log_entry)
+        result = analyze_memory_issue(log_entry)
+        self.assertIsNotNone(result)
+        self.assertEqual(result["type"], "MemoryIssue")
+        self.assertEqual(result["killed_process"], "com.example.memtest")
+
+    def test_memory_issue_not_detected(self):
+        line = "03-26 10:00:00.123  1234  5678 D MyActivity: onCreate"
+        log_entry = self._create_log_entry(line)
+        self.assertIsNotNone(log_entry)
+        result = analyze_memory_issue(log_entry)
+        self.assertIsNone(result)
+
 
 class TestReadLogFile(unittest.TestCase):
     def test_read_log_file_counts(self):
@@ -259,6 +277,7 @@ class TestReadLogFile(unittest.TestCase):
         self.assertEqual(counts.get("ANR", 0), 1)
         self.assertEqual(counts.get("NativeCrashHint", 0), 1)
         self.assertEqual(counts.get("SystemError", 0), 1)
+        self.assertEqual(counts.get("MemoryIssue", 0), 1)
 
 
 class TestJsonOutput(unittest.TestCase):
