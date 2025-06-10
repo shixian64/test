@@ -26,6 +26,16 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Import intelligent features if available
+try:
+    from .intelligent.smart_search import SmartSearchEngine
+    from .intelligent.priority_scorer import IssuePriorityScorer, IssueContext
+    INTELLIGENT_FEATURES_AVAILABLE = True
+    logger.info("Intelligent features loaded successfully")
+except ImportError:
+    INTELLIGENT_FEATURES_AVAILABLE = False
+    logger.debug("Intelligent features not available")
+
 # --- Configuration for Issue Detection ---
 
 # ISSUE_PATTERNS defines the rules for detecting various log issues.
@@ -738,6 +748,200 @@ def main(argv: Optional[List[str]] = None) -> None:
     except Exception as e:
         logger.error(f"Unexpected error during analysis: {e}")
         raise
+
+
+# Intelligent Features Integration
+
+def smart_search_logs(query: str, log_files: List[Union[str, Path]], max_results: int = 50) -> List[Dict[str, Any]]:
+    """
+    Perform intelligent search across multiple log files
+
+    Args:
+        query: Natural language or keyword search query
+        log_files: List of log file paths to search
+        max_results: Maximum number of results to return
+
+    Returns:
+        List of search results with relevance scoring
+    """
+    if not INTELLIGENT_FEATURES_AVAILABLE:
+        logger.warning("Intelligent features not available. Using basic search.")
+        return basic_search_logs(query, log_files, max_results)
+
+    search_engine = SmartSearchEngine()
+    all_results = []
+
+    for log_file in log_files:
+        try:
+            # Read log lines
+            log_lines = []
+            for line in iter_log_lines(log_file):
+                log_lines.append(line)
+
+            # Perform smart search
+            results = search_engine.smart_search(query, log_lines, max_results)
+
+            # Add file information to results
+            for result in results:
+                result_dict = {
+                    'file': str(log_file),
+                    'line_number': result.line_number,
+                    'content': result.content,
+                    'relevance_score': result.relevance_score,
+                    'match_type': result.match_type.value,
+                    'highlights': result.highlights
+                }
+                all_results.append(result_dict)
+
+        except Exception as e:
+            logger.error(f"Error searching in {log_file}: {e}")
+
+    # Sort by relevance score
+    all_results.sort(key=lambda x: x['relevance_score'], reverse=True)
+    return all_results[:max_results]
+
+
+def basic_search_logs(query: str, log_files: List[Union[str, Path]], max_results: int = 50) -> List[Dict[str, Any]]:
+    """
+    Basic search functionality when intelligent features are not available
+    """
+    results = []
+    query_lower = query.lower()
+
+    for log_file in log_files:
+        try:
+            for line_number, line in enumerate(iter_log_lines(log_file), 1):
+                if query_lower in line.lower():
+                    results.append({
+                        'file': str(log_file),
+                        'line_number': line_number,
+                        'content': line,
+                        'relevance_score': 1.0,
+                        'match_type': 'basic',
+                        'highlights': []
+                    })
+
+                    if len(results) >= max_results:
+                        break
+
+        except Exception as e:
+            logger.error(f"Error searching in {log_file}: {e}")
+
+    return results
+
+
+def prioritize_issues(issues: List[Dict[str, Any]], context: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+    """
+    Add intelligent priority scoring to detected issues
+
+    Args:
+        issues: List of detected issues
+        context: Additional context for priority calculation
+
+    Returns:
+        Issues with priority information added
+    """
+    if not INTELLIGENT_FEATURES_AVAILABLE:
+        logger.warning("Intelligent features not available. Using basic prioritization.")
+        return basic_prioritize_issues(issues)
+
+    scorer = IssuePriorityScorer()
+
+    # Create context object
+    issue_context = None
+    if context:
+        issue_context = IssueContext(
+            app_version=context.get('app_version'),
+            user_count_affected=context.get('user_count_affected', 0),
+            release_stage=context.get('release_stage', 'production')
+        )
+
+    prioritized_issues = []
+
+    for issue in issues:
+        try:
+            # Convert issue to format expected by priority scorer
+            issue_data = {
+                'type': issue.get('type', 'unknown').lower(),
+                'severity': _determine_severity(issue),
+                'frequency': 1,  # Default frequency, could be enhanced
+                'component': _determine_component(issue),
+                'message': _get_issue_message(issue)
+            }
+
+            # Calculate priority
+            priority_info = scorer.calculate_priority(issue_data, issue_context)
+
+            # Add priority information to original issue
+            enhanced_issue = {**issue}
+            enhanced_issue.update(priority_info)
+
+            prioritized_issues.append(enhanced_issue)
+
+        except Exception as e:
+            logger.error(f"Error prioritizing issue: {e}")
+            prioritized_issues.append(issue)  # Add original issue if prioritization fails
+
+    # Sort by priority score
+    prioritized_issues.sort(key=lambda x: x.get('total_score', 0), reverse=True)
+
+    return prioritized_issues
+
+
+def basic_prioritize_issues(issues: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Basic prioritization when intelligent features are not available"""
+    priority_order = ['JavaCrash', 'NativeCrashHint', 'ANR', 'SystemError', 'MemoryIssue']
+
+    def get_priority_score(issue):
+        issue_type = issue.get('type', 'Unknown')
+        try:
+            return len(priority_order) - priority_order.index(issue_type)
+        except ValueError:
+            return 0
+
+    return sorted(issues, key=get_priority_score, reverse=True)
+
+
+def _determine_severity(issue: Dict[str, Any]) -> str:
+    """Determine severity based on issue type"""
+    issue_type = issue.get('type', '').lower()
+
+    severity_mapping = {
+        'javacrash': 'critical',
+        'nativecrashint': 'critical',
+        'anr': 'high',
+        'systemerror': 'high',
+        'memoryissue': 'medium'
+    }
+
+    return severity_mapping.get(issue_type, 'medium')
+
+
+def _determine_component(issue: Dict[str, Any]) -> str:
+    """Determine component based on issue details"""
+    trigger_line = issue.get('trigger_line')
+    if trigger_line and hasattr(trigger_line, 'tag'):
+        tag = trigger_line.tag.lower()
+
+        if 'system' in tag:
+            return 'system_server'
+        elif 'activity' in tag:
+            return 'activity'
+        elif 'service' in tag:
+            return 'service'
+        else:
+            return 'application'
+
+    return 'unknown'
+
+
+def _get_issue_message(issue: Dict[str, Any]) -> str:
+    """Extract message from issue"""
+    trigger_line = issue.get('trigger_line')
+    if trigger_line and hasattr(trigger_line, 'message'):
+        return trigger_line.message
+
+    return issue.get('type', 'Unknown issue')
 
 
 if __name__ == "__main__":

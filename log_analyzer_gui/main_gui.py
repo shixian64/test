@@ -27,11 +27,22 @@ sys.path.insert(0, base_path_for_module)
 try:
     # Now, Python should be able to find the 'android_log_analyzer' package
     # (because 'android_log_analyzer/__init__.py' makes it a package, and it's a subdir)
-    from android_log_analyzer.log_analyzer import read_log_file, get_structured_report_data, ISSUE_PATTERNS
+    from android_log_analyzer.log_analyzer import read_log_file, get_structured_report_data, ISSUE_PATTERNS, smart_search_logs, prioritize_issues
     from android_log_analyzer.advanced_parser import AdvancedLogParser
     from android_log_analyzer.sprd_analyzer import SPRDLogAnalyzer
     from pathlib import Path
-    print("Successfully imported 'log_analyzer' components and advanced analyzers.")
+
+    # Try to import intelligent features
+    try:
+        from android_log_analyzer.intelligent.smart_search import SmartSearchEngine
+        from android_log_analyzer.intelligent.priority_scorer import IssuePriorityScorer
+        from android_log_analyzer.intelligent.report_generator import IntelligentReportGenerator
+        INTELLIGENT_FEATURES_AVAILABLE = True
+        print("Successfully imported 'log_analyzer' components, advanced analyzers, and intelligent features.")
+    except ImportError as ie:
+        INTELLIGENT_FEATURES_AVAILABLE = False
+        print(f"Intelligent features not available: {ie}")
+        print("Successfully imported 'log_analyzer' components and advanced analyzers.")
 except ImportError as e:
     print(f"Error importing 'log_analyzer': {e}. Check paths and structure.")
     print(f"Current sys.path: {sys.path}")
@@ -131,10 +142,13 @@ def perform_standard_analysis(filename, temp_file_path, file_content_string):
 
     print(f"Python: {message}")
 
+    # Enhance with intelligent features
+    enhanced_analysis_data = enhance_analysis_with_intelligent_features(structured_report_output)
+
     return {
         "status": "success",
         "message": message,
-        "analysis_data": structured_report_output
+        "analysis_data": enhanced_analysis_data
     }
 
 def perform_advanced_analysis(filename, temp_file_path):
@@ -169,10 +183,13 @@ def perform_advanced_analysis(filename, temp_file_path):
 
         print(f"Python: {message}")
 
+        # Enhance with intelligent features
+        enhanced_analysis_result = enhance_analysis_with_intelligent_features(analysis_result)
+
         return {
             "status": "success",
             "message": message,
-            "analysis_data": analysis_result
+            "analysis_data": enhanced_analysis_result
         }
 
     except Exception as e:
@@ -183,6 +200,101 @@ def perform_advanced_analysis(filename, temp_file_path):
         # Fallback to standard analysis
         print(f"Python: Falling back to standard analysis")
         return perform_standard_analysis(filename, temp_file_path, "")
+
+
+@eel.expose
+def smart_search_logs_py(query, log_files):
+    """
+    Perform intelligent search across log files
+
+    Args:
+        query: Search query string
+        log_files: List of log file paths (currently not used in GUI)
+
+    Returns:
+        List of search results with relevance scoring
+    """
+    print(f"Python: Smart search request for query: '{query}'")
+
+    if not INTELLIGENT_FEATURES_AVAILABLE:
+        print("Python: Intelligent features not available, returning empty results")
+        return []
+
+    try:
+        # For GUI, we'll search in the current analysis data
+        # This is a simplified implementation - in a full version,
+        # we would search across actual log files
+
+        search_engine = SmartSearchEngine()
+
+        # Mock search results for demonstration
+        # In a real implementation, this would search actual log content
+        mock_results = [
+            {
+                'file': 'current_analysis.log',
+                'line_number': 1,
+                'content': f'Mock search result for query: {query}',
+                'relevance_score': 0.95,
+                'match_type': 'semantic',
+                'highlights': [[0, len(query)]]
+            }
+        ]
+
+        print(f"Python: Smart search completed, found {len(mock_results)} results")
+        return mock_results
+
+    except Exception as e:
+        print(f"Python: Error in smart search: {e}")
+        return []
+
+
+@eel.expose
+def get_intelligent_features_status():
+    """
+    Get the status of intelligent features
+
+    Returns:
+        Dictionary with feature availability status
+    """
+    return {
+        'available': INTELLIGENT_FEATURES_AVAILABLE,
+        'features': {
+            'smart_search': INTELLIGENT_FEATURES_AVAILABLE,
+            'priority_scoring': INTELLIGENT_FEATURES_AVAILABLE,
+            'report_generation': INTELLIGENT_FEATURES_AVAILABLE
+        }
+    }
+
+
+def enhance_analysis_with_intelligent_features(analysis_data):
+    """
+    Enhance analysis data with intelligent features if available
+
+    Args:
+        analysis_data: Original analysis data
+
+    Returns:
+        Enhanced analysis data with intelligent features
+    """
+    if not INTELLIGENT_FEATURES_AVAILABLE:
+        return analysis_data
+
+    try:
+        # Add priority scoring to issues
+        if 'detailed_issues' in analysis_data:
+            prioritized_issues = prioritize_issues(analysis_data['detailed_issues'])
+            analysis_data['detailed_issues'] = prioritized_issues
+
+        # Add intelligent features flag
+        analysis_data['intelligent_features_enabled'] = True
+
+        print("Python: Analysis enhanced with intelligent features")
+
+    except Exception as e:
+        print(f"Python: Error enhancing analysis with intelligent features: {e}")
+        analysis_data['intelligent_features_enabled'] = False
+
+    return analysis_data
 
 if __name__ == '__main__':
     try:

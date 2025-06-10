@@ -2,6 +2,8 @@
 let currentDetailedIssues = [];
 let currentLanguage = 'en';
 let filteredIssues = [];
+let intelligentFeaturesEnabled = false;
+let currentAnalysisData = null;
 
 // Language translations
 const translations = {
@@ -329,6 +331,10 @@ function displayResults(analysisData) {
 
     currentDetailedIssues = analysisData.detailed_issues || [];
     filteredIssues = [...currentDetailedIssues];
+    currentAnalysisData = analysisData;
+
+    // Check for intelligent features
+    intelligentFeaturesEnabled = analysisData.intelligent_features_enabled || false;
 
     // Check if this is an advanced analysis (SPRD package)
     const isAdvancedAnalysis = analysisData.package_info || analysisData.sprd_analysis;
@@ -337,6 +343,11 @@ function displayResults(analysisData) {
         displayAdvancedResults(analysisData);
     } else {
         displayBasicResults(analysisData);
+    }
+
+    // Add intelligent search capabilities
+    if (intelligentFeaturesEnabled) {
+        enhanceSearchWithIntelligentFeatures();
     }
 
     resultsSection.style.display = 'block';
@@ -804,6 +815,217 @@ document.addEventListener('keydown', (event) => {
         }
     }
 });
+
+// Intelligent Features Enhancement
+function enhanceSearchWithIntelligentFeatures() {
+    const searchInput = document.getElementById('searchInput');
+    if (!searchInput) return;
+
+    // Add search suggestions
+    createSearchSuggestions(searchInput);
+
+    // Add smart search button
+    addSmartSearchButton(searchInput);
+
+    // Add priority indicators to issues
+    addPriorityIndicators();
+}
+
+function createSearchSuggestions(searchInput) {
+    const suggestionsContainer = document.createElement('div');
+    suggestionsContainer.className = 'search-suggestions';
+    suggestionsContainer.id = 'searchSuggestions';
+    suggestionsContainer.style.display = 'none';
+
+    searchInput.parentNode.appendChild(suggestionsContainer);
+
+    // Add input event listener for suggestions
+    searchInput.addEventListener('input', debounce(showSearchSuggestions, 300));
+
+    // Hide suggestions when clicking outside
+    document.addEventListener('click', (e) => {
+        if (!searchInput.contains(e.target) && !suggestionsContainer.contains(e.target)) {
+            suggestionsContainer.style.display = 'none';
+        }
+    });
+}
+
+function showSearchSuggestions() {
+    const searchInput = document.getElementById('searchInput');
+    const suggestionsContainer = document.getElementById('searchSuggestions');
+    const query = searchInput.value.trim();
+
+    if (query.length < 2) {
+        suggestionsContainer.style.display = 'none';
+        return;
+    }
+
+    // Generate suggestions based on common patterns
+    const suggestions = generateSearchSuggestions(query);
+
+    if (suggestions.length > 0) {
+        suggestionsContainer.innerHTML = suggestions.map(suggestion =>
+            `<div class="suggestion-item" onclick="applySuggestion('${suggestion}')">${suggestion}</div>`
+        ).join('');
+        suggestionsContainer.style.display = 'block';
+    } else {
+        suggestionsContainer.style.display = 'none';
+    }
+}
+
+function generateSearchSuggestions(query) {
+    const commonQueries = [
+        'show all crashes',
+        'find memory issues',
+        'performance problems',
+        'network errors',
+        'audio underruns',
+        'system errors',
+        'application not responding',
+        'out of memory'
+    ];
+
+    const queryLower = query.toLowerCase();
+    return commonQueries.filter(suggestion =>
+        suggestion.toLowerCase().includes(queryLower)
+    ).slice(0, 5);
+}
+
+function applySuggestion(suggestion) {
+    const searchInput = document.getElementById('searchInput');
+    const suggestionsContainer = document.getElementById('searchSuggestions');
+
+    searchInput.value = suggestion;
+    suggestionsContainer.style.display = 'none';
+
+    // Trigger smart search
+    performSmartSearch(suggestion);
+}
+
+function addSmartSearchButton(searchInput) {
+    const smartSearchBtn = document.createElement('button');
+    smartSearchBtn.className = 'smart-search-btn';
+    smartSearchBtn.innerHTML = '🧠';
+    smartSearchBtn.title = 'Smart Search';
+    smartSearchBtn.onclick = () => performSmartSearch(searchInput.value);
+
+    searchInput.parentNode.appendChild(smartSearchBtn);
+}
+
+async function performSmartSearch(query) {
+    if (!query.trim()) return;
+
+    try {
+        // Call Python backend for smart search
+        const result = await eel.smart_search_logs_py(query, [])();
+
+        if (result && result.length > 0) {
+            displaySmartSearchResults(result);
+        } else {
+            showSearchMessage('No results found for smart search');
+        }
+    } catch (error) {
+        console.error('Smart search error:', error);
+        showSearchMessage('Smart search failed, using basic search');
+        filterIssues(); // Fallback to basic search
+    }
+}
+
+function displaySmartSearchResults(results) {
+    // Create a modal or section to display smart search results
+    const modal = document.createElement('div');
+    modal.className = 'smart-search-modal';
+    modal.innerHTML = `
+        <div class="smart-search-content">
+            <div class="smart-search-header">
+                <h3>🧠 Smart Search Results</h3>
+                <button onclick="closeSmartSearchModal()" class="close-btn">&times;</button>
+            </div>
+            <div class="smart-search-results">
+                ${results.map(result => `
+                    <div class="smart-result-item">
+                        <div class="result-file">${result.file}</div>
+                        <div class="result-line">Line ${result.line_number}</div>
+                        <div class="result-content">${highlightMatches(result.content, result.highlights)}</div>
+                        <div class="result-score">Relevance: ${(result.relevance_score * 100).toFixed(1)}%</div>
+                    </div>
+                `).join('')}
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(modal);
+}
+
+function highlightMatches(content, highlights) {
+    if (!highlights || highlights.length === 0) return content;
+
+    let highlightedContent = content;
+    // Sort highlights by start position (descending) to avoid index shifting
+    highlights.sort((a, b) => b[0] - a[0]);
+
+    highlights.forEach(([start, end]) => {
+        const before = highlightedContent.substring(0, start);
+        const match = highlightedContent.substring(start, end);
+        const after = highlightedContent.substring(end);
+        highlightedContent = before + `<mark>${match}</mark>` + after;
+    });
+
+    return highlightedContent;
+}
+
+function closeSmartSearchModal() {
+    const modal = document.querySelector('.smart-search-modal');
+    if (modal) {
+        modal.remove();
+    }
+}
+
+function addPriorityIndicators() {
+    // Add priority indicators to existing issues if they have priority information
+    const issueRows = document.querySelectorAll('.issue-row');
+
+    issueRows.forEach((row, index) => {
+        const issue = filteredIssues[index];
+        if (issue && issue.priority) {
+            const priorityIndicator = document.createElement('span');
+            priorityIndicator.className = `priority-indicator priority-${issue.priority}`;
+            priorityIndicator.textContent = issue.priority.toUpperCase();
+            priorityIndicator.title = `Priority: ${issue.priority} (Score: ${issue.total_score || 'N/A'})`;
+
+            const firstCell = row.querySelector('td');
+            if (firstCell) {
+                firstCell.appendChild(priorityIndicator);
+            }
+        }
+    });
+}
+
+function showSearchMessage(message) {
+    const searchInput = document.getElementById('searchInput');
+    const messageDiv = document.createElement('div');
+    messageDiv.className = 'search-message';
+    messageDiv.textContent = message;
+
+    searchInput.parentNode.appendChild(messageDiv);
+
+    setTimeout(() => {
+        messageDiv.remove();
+    }, 3000);
+}
+
+// Utility function for debouncing
+function debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+        const later = () => {
+            clearTimeout(timeout);
+            func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+    };
+}
 
 // Initialize the application when DOM is loaded
 if (document.readyState === 'loading') {
