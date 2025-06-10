@@ -89,6 +89,74 @@
                         <span id="export-btn-en" class="lang-content">Export JSON</span>
                         <span id="export-btn-zh" class="lang-content" style="display: none;">导出 JSON</span>
                     </button>
+                    <button id="generateReportBtn" class="action-btn secondary">
+                        <i class="fas fa-file-pdf"></i>
+                        <span id="report-btn-en" class="lang-content">Generate Report</span>
+                        <span id="report-btn-zh" class="lang-content" style="display: none;">生成报告</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Package Overview -->
+            <div id="packageOverview" class="package-overview" style="display: none;">
+                <h3 id="package-title-en" class="lang-content">Package Overview</h3>
+                <h3 id="package-title-zh" class="lang-content" style="display: none;">包概览</h3>
+                <div class="overview-grid">
+                    <div class="overview-card">
+                        <div class="card-icon"><i class="fas fa-archive"></i></div>
+                        <div class="card-content">
+                            <div class="card-title" id="package-name-en">Package Name</div>
+                            <div class="card-title" id="package-name-zh" style="display: none;">包名称</div>
+                            <div class="card-value" id="packageName">-</div>
+                        </div>
+                    </div>
+                    <div class="overview-card">
+                        <div class="card-icon"><i class="fas fa-hdd"></i></div>
+                        <div class="card-content">
+                            <div class="card-title" id="package-size-en">Package Size</div>
+                            <div class="card-title" id="package-size-zh" style="display: none;">包大小</div>
+                            <div class="card-value" id="packageSize">-</div>
+                        </div>
+                    </div>
+                    <div class="overview-card">
+                        <div class="card-icon"><i class="fas fa-files"></i></div>
+                        <div class="card-content">
+                            <div class="card-title" id="total-files-en">Total Files</div>
+                            <div class="card-title" id="total-files-zh" style="display: none;">文件总数</div>
+                            <div class="card-value" id="totalFiles">-</div>
+                        </div>
+                    </div>
+                    <div class="overview-card">
+                        <div class="card-icon"><i class="fas fa-microchip"></i></div>
+                        <div class="card-content">
+                            <div class="card-title" id="subsystems-en">Subsystems</div>
+                            <div class="card-title" id="subsystems-zh" style="display: none;">子系统</div>
+                            <div class="card-value" id="subsystemCount">-</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Platform Information -->
+            <div id="platformInfo" class="platform-info" style="display: none;">
+                <h3 id="platform-title-en" class="lang-content">Platform Information</h3>
+                <h3 id="platform-title-zh" class="lang-content" style="display: none;">平台信息</h3>
+                <div class="platform-grid">
+                    <div class="platform-item">
+                        <span class="platform-label" id="chipset-label-en">Chipset:</span>
+                        <span class="platform-label" id="chipset-label-zh" style="display: none;">芯片组:</span>
+                        <span class="platform-value" id="chipsetInfo">Unknown</span>
+                    </div>
+                    <div class="platform-item">
+                        <span class="platform-label" id="android-label-en">Android Version:</span>
+                        <span class="platform-label" id="android-label-zh" style="display: none;">Android 版本:</span>
+                        <span class="platform-value" id="androidVersion">Unknown</span>
+                    </div>
+                    <div class="platform-item">
+                        <span class="platform-label" id="build-label-en">Build Version:</span>
+                        <span class="platform-label" id="build-label-zh" style="display: none;">构建版本:</span>
+                        <span class="platform-value" id="buildVersion">Unknown</span>
+                    </div>
                 </div>
             </div>
 
@@ -97,6 +165,27 @@
                 <h3 id="summary-title-en" class="lang-content">Summary</h3>
                 <h3 id="summary-title-zh" class="lang-content" style="display: none;">摘要</h3>
                 <div id="summaryStats" class="summary-cards"></div>
+            </div>
+
+            <!-- Subsystem Analysis -->
+            <div id="subsystemAnalysis" class="subsystem-analysis" style="display: none;">
+                <h3 id="subsystem-title-en" class="lang-content">Subsystem Analysis</h3>
+                <h3 id="subsystem-title-zh" class="lang-content" style="display: none;">子系统分析</h3>
+                <div id="subsystemTabs" class="subsystem-tabs">
+                    <!-- Tabs will be generated dynamically -->
+                </div>
+                <div id="subsystemContent" class="subsystem-content">
+                    <!-- Content will be generated dynamically -->
+                </div>
+            </div>
+
+            <!-- Timeline View -->
+            <div id="timelineSection" class="timeline-section" style="display: none;">
+                <h3 id="timeline-title-en" class="lang-content">Event Timeline</h3>
+                <h3 id="timeline-title-zh" class="lang-content" style="display: none;">事件时间线</h3>
+                <div id="timelineContainer" class="timeline-container">
+                    <!-- Timeline will be generated here -->
+                </div>
             </div>
 
             <!-- Detailed Issues -->
@@ -111,6 +200,16 @@
                     <div class="filter-controls">
                         <select id="typeFilter">
                             <option value="">All Types</option>
+                        </select>
+                        <select id="subsystemFilter">
+                            <option value="">All Subsystems</option>
+                        </select>
+                        <select id="severityFilter">
+                            <option value="">All Severities</option>
+                            <option value="critical">Critical</option>
+                            <option value="high">High</option>
+                            <option value="medium">Medium</option>
+                            <option value="low">Low</option>
                         </select>
                     </div>
                 </div>

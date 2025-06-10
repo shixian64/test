@@ -28,7 +28,9 @@ try:
     # Now, Python should be able to find the 'android_log_analyzer' package
     # (because 'android_log_analyzer/__init__.py' makes it a package, and it's a subdir)
     from android_log_analyzer.log_analyzer import read_log_file, get_structured_report_data, ISSUE_PATTERNS
-    print("Successfully imported 'log_analyzer' components.")
+    from android_log_analyzer.advanced_parser import AdvancedLogParser
+    from android_log_analyzer.sprd_analyzer import SPRDLogAnalyzer
+    print("Successfully imported 'log_analyzer' components and advanced analyzers.")
 except ImportError as e:
     print(f"Error importing 'log_analyzer': {e}. Check paths and structure.")
     print(f"Current sys.path: {sys.path}")
@@ -47,60 +49,139 @@ except ImportError as e:
 web_folder = os.path.join(script_root_dir, 'web') # 'web' folder is sibling to main_gui.py in dev, and copied by 'files' in build
 eel.init(web_folder)
 
+def is_complex_log_package(filename):
+    """Check if the file is a complex log package (zip/tar) that needs advanced analysis"""
+    return (filename.lower().endswith(('.zip', '.tar', '.tar.gz', '.tgz')) or
+            'ylog' in filename.lower() or
+            any(keyword in filename.lower() for keyword in ['sprd', 'unisoc', 'log_package']))
+
 @eel.expose
 def start_analysis_py(filename, file_content_string):
     print(f"Python: Received file '{filename}'. Content length: {len(file_content_string)} bytes.")
-    
+
     temp_file_path = ""
     try:
+        # Determine file extension for proper handling
+        file_extension = os.path.splitext(filename)[1].lower()
+        if file_extension in ['.zip', '.tar', '.gz']:
+            # Handle binary files differently
+            suffix = file_extension
+            mode = 'wb'
+            file_content = file_content_string.encode('utf-8') if isinstance(file_content_string, str) else file_content_string
+        else:
+            suffix = ".log"
+            mode = 'w+'
+            file_content = file_content_string
+
         try:
-            # Try to use a 'temp_files' subdir relative to script_root_dir (which is 'app' in packaged)
-            # This ensures it's writable within the app's space if possible.
+            # Try to use a 'temp_files' subdir relative to script_root_dir
             app_temp_dir = os.path.join(script_root_dir, "temp_files")
             os.makedirs(app_temp_dir, exist_ok=True)
-            with tempfile.NamedTemporaryFile(mode='w+', delete=False, encoding='utf-8', errors='ignore', dir=app_temp_dir, suffix=".log") as tmp_file:
-                tmp_file.write(file_content_string)
+            with tempfile.NamedTemporaryFile(mode=mode, delete=False,
+                                           encoding='utf-8' if mode.startswith('w') else None,
+                                           errors='ignore' if mode.startswith('w') else None,
+                                           dir=app_temp_dir, suffix=suffix) as tmp_file:
+                tmp_file.write(file_content)
                 temp_file_path = tmp_file.name
         except Exception as e_custom_temp:
             print(f"Could not use custom temp dir '{app_temp_dir}': {e_custom_temp}. Falling back to default temp dir.")
-            with tempfile.NamedTemporaryFile(mode='w+', delete=False, encoding='utf-8', errors='ignore', suffix=".log") as tmp_file:
-                tmp_file.write(file_content_string)
+            with tempfile.NamedTemporaryFile(mode=mode, delete=False,
+                                           encoding='utf-8' if mode.startswith('w') else None,
+                                           errors='ignore' if mode.startswith('w') else None,
+                                           suffix=suffix) as tmp_file:
+                tmp_file.write(file_content)
                 temp_file_path = tmp_file.name
 
         print(f"Python: Content written to temporary file: {temp_file_path}")
 
-        detected_issues = read_log_file(temp_file_path, ISSUE_PATTERNS)
-        
-        if not file_content_string.strip() and not detected_issues: 
-             return {"status": "error", "message": f"File '{filename}' is empty or contains only whitespace."}
-
-        structured_report_output = get_structured_report_data(detected_issues)
-        
-        message = f"Analysis of {filename} complete."
-        if not detected_issues: # Check if the list of issues is empty
-            message = f"Analysis of {filename} complete. No issues detected."
+        # Check if this needs advanced analysis
+        if is_complex_log_package(filename):
+            print(f"Python: Detected complex log package, using advanced analysis")
+            return perform_advanced_analysis(filename, temp_file_path)
         else:
-            # Use summary_counts from the structured report to get total issues
-            total_issues_found = sum(structured_report_output.get("summary_counts", {}).values())
-            message = f"Analysis of {filename} complete. Issues found: {total_issues_found}"
-        
-        print(f"Python: {message}")
-
-        return {
-            "status": "success", 
-            "message": message,
-            "analysis_data": structured_report_output
-        }
+            print(f"Python: Using standard analysis")
+            return perform_standard_analysis(filename, temp_file_path, file_content_string)
 
     except Exception as e:
         print(f"Python: Error during analysis of {filename}: {e}")
         import traceback
-        traceback.print_exc() 
+        traceback.print_exc()
         return {"status": "error", "message": f"Error during analysis: {str(e)}"}
     finally:
         if temp_file_path and os.path.exists(temp_file_path):
             os.remove(temp_file_path)
             print(f"Python: Temporary file {temp_file_path} removed.")
+
+def perform_standard_analysis(filename, temp_file_path, file_content_string):
+    """Perform standard single-file analysis"""
+    detected_issues = read_log_file(temp_file_path, ISSUE_PATTERNS)
+
+    if not file_content_string.strip() and not detected_issues:
+         return {"status": "error", "message": f"File '{filename}' is empty or contains only whitespace."}
+
+    structured_report_output = get_structured_report_data(detected_issues)
+
+    message = f"Analysis of {filename} complete."
+    if not detected_issues:
+        message = f"Analysis of {filename} complete. No issues detected."
+    else:
+        total_issues_found = sum(structured_report_output.get("summary_counts", {}).values())
+        message = f"Analysis of {filename} complete. Issues found: {total_issues_found}"
+
+    print(f"Python: {message}")
+
+    return {
+        "status": "success",
+        "message": message,
+        "analysis_data": structured_report_output
+    }
+
+def perform_advanced_analysis(filename, temp_file_path):
+    """Perform advanced analysis for complex log packages"""
+    try:
+        # Determine which analyzer to use
+        if 'ylog' in filename.lower() or any(keyword in filename.lower() for keyword in ['sprd', 'unisoc']):
+            analyzer = SPRDLogAnalyzer()
+            analysis_result = analyzer.analyze_sprd_package(Path(temp_file_path))
+        else:
+            analyzer = AdvancedLogParser()
+            analysis_result = analyzer.analyze_log_package(Path(temp_file_path))
+
+        # Calculate total issues
+        total_issues = 0
+        if 'subsystem_analysis' in analysis_result:
+            for subsystem_data in analysis_result['subsystem_analysis'].values():
+                total_issues += len(subsystem_data.get('issues', []))
+        elif 'detailed_issues' in analysis_result:
+            total_issues = len(analysis_result['detailed_issues'])
+
+        # Add critical issues count
+        critical_issues = len(analysis_result.get('critical_issues', []))
+
+        message = f"Advanced analysis of {filename} complete. "
+        if total_issues == 0:
+            message += "No issues detected."
+        else:
+            message += f"Issues found: {total_issues}"
+            if critical_issues > 0:
+                message += f" (including {critical_issues} critical)"
+
+        print(f"Python: {message}")
+
+        return {
+            "status": "success",
+            "message": message,
+            "analysis_data": analysis_result
+        }
+
+    except Exception as e:
+        print(f"Python: Error in advanced analysis: {e}")
+        import traceback
+        traceback.print_exc()
+
+        # Fallback to standard analysis
+        print(f"Python: Falling back to standard analysis")
+        return perform_standard_analysis(filename, temp_file_path, "")
 
 if __name__ == '__main__':
     try:

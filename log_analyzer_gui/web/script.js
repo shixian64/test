@@ -326,11 +326,54 @@ function showStatus(message, type) {
 
 function displayResults(analysisData) {
     const resultsSection = document.getElementById('resultsSection');
-    const summaryStatsElement = document.getElementById('summaryStats');
-    const detailedIssuesTableContainerElement = document.getElementById('detailedIssuesTableContainer');
 
     currentDetailedIssues = analysisData.detailed_issues || [];
     filteredIssues = [...currentDetailedIssues];
+
+    // Check if this is an advanced analysis (SPRD package)
+    const isAdvancedAnalysis = analysisData.package_info || analysisData.sprd_analysis;
+
+    if (isAdvancedAnalysis) {
+        displayAdvancedResults(analysisData);
+    } else {
+        displayBasicResults(analysisData);
+    }
+
+    resultsSection.style.display = 'block';
+}
+
+function displayAdvancedResults(analysisData) {
+    // Display package overview
+    displayPackageOverview(analysisData.package_info || {});
+
+    // Display platform information
+    if (analysisData.sprd_analysis && analysisData.sprd_analysis.platform_info) {
+        displayPlatformInfo(analysisData.sprd_analysis.platform_info);
+    }
+
+    // Display summary
+    displaySummary(analysisData.summary_counts || analysisData.summary || {});
+
+    // Display subsystem analysis
+    if (analysisData.subsystem_analysis) {
+        displaySubsystemAnalysis(analysisData.subsystem_analysis);
+    }
+
+    // Display timeline
+    if (analysisData.timeline && analysisData.timeline.length > 0) {
+        displayTimeline(analysisData.timeline);
+    }
+
+    // Display detailed issues
+    displayIssuesTable();
+
+    // Setup filters
+    setupAdvancedFilters(analysisData);
+}
+
+function displayBasicResults(analysisData) {
+    // Hide advanced sections
+    hideAdvancedSections();
 
     // Display summary
     displaySummary(analysisData.summary_counts || {});
@@ -340,8 +383,175 @@ function displayResults(analysisData) {
 
     // Setup filters
     setupFilters();
+}
 
-    resultsSection.style.display = 'block';
+function hideAdvancedSections() {
+    const sections = ['packageOverview', 'platformInfo', 'subsystemAnalysis', 'timelineSection'];
+    sections.forEach(id => {
+        const element = document.getElementById(id);
+        if (element) element.style.display = 'none';
+    });
+}
+
+function displayPackageOverview(packageInfo) {
+    const packageOverview = document.getElementById('packageOverview');
+
+    if (!packageInfo || Object.keys(packageInfo).length === 0) {
+        packageOverview.style.display = 'none';
+        return;
+    }
+
+    document.getElementById('packageName').textContent = packageInfo.name || 'Unknown';
+    document.getElementById('packageSize').textContent = formatFileSize(packageInfo.size || 0);
+    document.getElementById('totalFiles').textContent = packageInfo.total_files || 0;
+    document.getElementById('subsystemCount').textContent = packageInfo.subsystems ? packageInfo.subsystems.length : 0;
+
+    packageOverview.style.display = 'block';
+}
+
+function displayPlatformInfo(platformInfo) {
+    const platformInfoSection = document.getElementById('platformInfo');
+
+    if (!platformInfo || Object.keys(platformInfo).length === 0) {
+        platformInfoSection.style.display = 'none';
+        return;
+    }
+
+    document.getElementById('chipsetInfo').textContent = platformInfo.chipset || 'Unknown';
+    document.getElementById('androidVersion').textContent = platformInfo.android_version || 'Unknown';
+    document.getElementById('buildVersion').textContent = platformInfo.build_version || 'Unknown';
+
+    platformInfoSection.style.display = 'block';
+}
+
+function displaySubsystemAnalysis(subsystemAnalysis) {
+    const subsystemSection = document.getElementById('subsystemAnalysis');
+    const tabsContainer = document.getElementById('subsystemTabs');
+    const contentContainer = document.getElementById('subsystemContent');
+
+    if (!subsystemAnalysis || Object.keys(subsystemAnalysis).length === 0) {
+        subsystemSection.style.display = 'none';
+        return;
+    }
+
+    // Clear existing content
+    tabsContainer.innerHTML = '';
+    contentContainer.innerHTML = '';
+
+    // Create tabs and content for each subsystem
+    const subsystems = Object.keys(subsystemAnalysis);
+    subsystems.forEach((subsystemName, index) => {
+        const subsystemData = subsystemAnalysis[subsystemName];
+
+        // Create tab
+        const tab = document.createElement('button');
+        tab.className = `subsystem-tab ${index === 0 ? 'active' : ''}`;
+        tab.textContent = subsystemName.charAt(0).toUpperCase() + subsystemName.slice(1);
+        tab.onclick = () => switchSubsystemTab(subsystemName);
+        tabsContainer.appendChild(tab);
+
+        // Create content panel
+        const panel = document.createElement('div');
+        panel.className = `subsystem-panel ${index === 0 ? 'active' : ''}`;
+        panel.id = `panel-${subsystemName}`;
+        panel.innerHTML = createSubsystemPanelContent(subsystemData);
+        contentContainer.appendChild(panel);
+    });
+
+    subsystemSection.style.display = 'block';
+}
+
+function createSubsystemPanelContent(subsystemData) {
+    const stats = subsystemData.statistics || {};
+    const issues = subsystemData.issues || [];
+
+    return `
+        <div class="subsystem-stats">
+            <div class="subsystem-stat">
+                <div class="stat-value">${subsystemData.file_count || 0}</div>
+                <div class="stat-label">Files</div>
+            </div>
+            <div class="subsystem-stat">
+                <div class="stat-value">${formatFileSize(subsystemData.total_size || 0)}</div>
+                <div class="stat-label">Total Size</div>
+            </div>
+            <div class="subsystem-stat">
+                <div class="stat-value">${issues.length}</div>
+                <div class="stat-label">Issues Found</div>
+            </div>
+            <div class="subsystem-stat">
+                <div class="stat-value">${Object.keys(stats.issue_types || {}).length}</div>
+                <div class="stat-label">Issue Types</div>
+            </div>
+        </div>
+        <div class="subsystem-issues">
+            <h4>Recent Issues</h4>
+            ${issues.slice(0, 5).map(issue => `
+                <div class="issue-preview">
+                    <span class="issue-type ${issue.type}">${issue.type}</span>
+                    <span class="issue-description">${issue.message || issue.trigger_line_str || 'No description'}</span>
+                </div>
+            `).join('')}
+        </div>
+    `;
+}
+
+function switchSubsystemTab(subsystemName) {
+    // Update tab states
+    document.querySelectorAll('.subsystem-tab').forEach(tab => {
+        tab.classList.remove('active');
+    });
+    event.target.classList.add('active');
+
+    // Update panel states
+    document.querySelectorAll('.subsystem-panel').forEach(panel => {
+        panel.classList.remove('active');
+    });
+    document.getElementById(`panel-${subsystemName}`).classList.add('active');
+}
+
+function displayTimeline(timeline) {
+    const timelineSection = document.getElementById('timelineSection');
+    const timelineContainer = document.getElementById('timelineContainer');
+
+    if (!timeline || timeline.length === 0) {
+        timelineSection.style.display = 'none';
+        return;
+    }
+
+    // Sort timeline by timestamp
+    const sortedTimeline = timeline.sort((a, b) => {
+        return new Date(a.timestamp || 0) - new Date(b.timestamp || 0);
+    });
+
+    // Create timeline items
+    const timelineHTML = sortedTimeline.slice(0, 50).map(event => `
+        <div class="timeline-item">
+            <div class="timeline-time">${event.timestamp || 'Unknown'}</div>
+            <div class="timeline-subsystem">${event.subsystem || 'System'}</div>
+            <div class="timeline-description">${event.description || event.type || 'Event'}</div>
+            <div class="timeline-severity ${event.severity || 'medium'}">${event.severity || 'medium'}</div>
+        </div>
+    `).join('');
+
+    timelineContainer.innerHTML = timelineHTML;
+    timelineSection.style.display = 'block';
+}
+
+function setupAdvancedFilters(analysisData) {
+    setupFilters();
+
+    // Add subsystem filter options
+    const subsystemFilter = document.getElementById('subsystemFilter');
+    if (subsystemFilter && analysisData.subsystem_analysis) {
+        const subsystems = Object.keys(analysisData.subsystem_analysis);
+        subsystems.forEach(subsystem => {
+            const option = document.createElement('option');
+            option.value = subsystem;
+            option.textContent = subsystem.charAt(0).toUpperCase() + subsystem.slice(1);
+            subsystemFilter.appendChild(option);
+        });
+    }
 }
 
 function displaySummary(summary) {
