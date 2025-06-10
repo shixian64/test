@@ -1,0 +1,11 @@
+# Core dependencies (none required - uses only standard library)
+
+# Development dependencies
+pytest>=6.0
+pytest-cov>=2.0
+black>=21.0
+flake8>=3.8
+mypy>=0.800
+
+# GUI dependencies (optional)
+eel>=0.12.0

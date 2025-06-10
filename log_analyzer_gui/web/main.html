@@ -1,43 +1,138 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Log Analyzer GUI</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Android Log Analyzer</title>
     <link rel="stylesheet" type="text/css" href="style.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <script type="text/javascript" src="/eel.js"></script>
 </head>
 <body>
+    <!-- Language Toggle -->
+    <div class="language-toggle">
+        <button onclick="toggleLanguage('en')" id="btn-en" class="lang-btn active">
+            <i class="fas fa-globe"></i> EN
+        </button>
+        <button onclick="toggleLanguage('zh')" id="btn-zh" class="lang-btn">
+            <i class="fas fa-globe"></i> 中文
+        </button>
+    </div>
+
     <div class="container">
-        <h1>Android Log Analyzer</h1>
-        
+        <!-- Header Section -->
+        <header class="app-header">
+            <div class="header-content">
+                <i class="fas fa-bug header-icon"></i>
+                <div class="header-text">
+                    <h1 id="app-title-en" class="lang-content">Android Log Analyzer</h1>
+                    <h1 id="app-title-zh" class="lang-content" style="display: none;">Android 日志分析器</h1>
+                    <p id="app-subtitle-en" class="lang-content">Detect crashes, ANRs, and system issues</p>
+                    <p id="app-subtitle-zh" class="lang-content" style="display: none;">检测崩溃、ANR 和系统问题</p>
+                </div>
+            </div>
+        </header>
+
+        <!-- File Input Section -->
         <div class="file-input-section">
-            <button id="selectFileBtn">Select Log File</button>
-            <input type="file" id="actualFileInput" style="display: none;" accept=".txt,.log">
-            <p id="selectedFileInfo">No file selected.</p>
+            <div class="file-drop-zone" id="fileDropZone">
+                <i class="fas fa-cloud-upload-alt upload-icon"></i>
+                <div class="upload-text">
+                    <p id="upload-text-en" class="lang-content">
+                        <strong>Drop your log file here</strong><br>
+                        or click to browse
+                    </p>
+                    <p id="upload-text-zh" class="lang-content" style="display: none;">
+                        <strong>将日志文件拖放到此处</strong><br>
+                        或点击浏览文件
+                    </p>
+                </div>
+                <button id="selectFileBtn" class="select-file-btn">
+                    <i class="fas fa-folder-open"></i>
+                    <span id="select-btn-text-en" class="lang-content">Select File</span>
+                    <span id="select-btn-text-zh" class="lang-content" style="display: none;">选择文件</span>
+                </button>
+                <input type="file" id="actualFileInput" style="display: none;"
+                       accept=".txt,.log,.gz,.zip" multiple>
+            </div>
+            <div id="selectedFileInfo" class="file-info">
+                <span id="no-file-en" class="lang-content">No file selected</span>
+                <span id="no-file-zh" class="lang-content" style="display: none;">未选择文件</span>
+            </div>
         </div>
 
+        <!-- Progress Section -->
+        <div class="progress-section" id="progressSection" style="display: none;">
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressFill"></div>
+            </div>
+            <p id="progressText" class="progress-text">Processing...</p>
+        </div>
+
+        <!-- Analysis Status Section -->
         <div class="analysis-status-section">
             <p id="analysisStatus"></p>
         </div>
 
-        <div id="resultsSection" style="display: none;">
-            <h2>Analysis Results</h2>
-            
-            <h3>Summary</h3>
-            <div id="summaryStats"></div>
-            
-            <h3>Detailed Issues</h3>
-            <div id="detailedIssuesTableContainer">
-                <!-- Table will be generated here by JavaScript -->
+        <!-- Results Section -->
+        <div id="resultsSection" class="results-section" style="display: none;">
+            <div class="results-header">
+                <h2 id="results-title-en" class="lang-content">
+                    <i class="fas fa-chart-bar"></i> Analysis Results
+                </h2>
+                <h2 id="results-title-zh" class="lang-content" style="display: none;">
+                    <i class="fas fa-chart-bar"></i> 分析结果
+                </h2>
+                <div class="results-actions">
+                    <button id="exportBtn" class="action-btn">
+                        <i class="fas fa-download"></i>
+                        <span id="export-btn-en" class="lang-content">Export JSON</span>
+                        <span id="export-btn-zh" class="lang-content" style="display: none;">导出 JSON</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Summary Cards -->
+            <div class="summary-section">
+                <h3 id="summary-title-en" class="lang-content">Summary</h3>
+                <h3 id="summary-title-zh" class="lang-content" style="display: none;">摘要</h3>
+                <div id="summaryStats" class="summary-cards"></div>
+            </div>
+
+            <!-- Detailed Issues -->
+            <div class="issues-section">
+                <h3 id="issues-title-en" class="lang-content">Detailed Issues</h3>
+                <h3 id="issues-title-zh" class="lang-content" style="display: none;">详细问题</h3>
+                <div class="table-controls">
+                    <div class="search-box">
+                        <i class="fas fa-search"></i>
+                        <input type="text" id="searchInput" placeholder="Search issues...">
+                    </div>
+                    <div class="filter-controls">
+                        <select id="typeFilter">
+                            <option value="">All Types</option>
+                        </select>
+                    </div>
+                </div>
+                <div id="detailedIssuesTableContainer" class="table-container">
+                    <!-- Table will be generated here by JavaScript -->
+                </div>
             </div>
         </div>
 
         <!-- Modal for displaying issue details -->
         <div id="issueDetailModal" class="modal" style="display:none;">
             <div class="modal-content">
-                <span class="close-button" onclick="closeModal()">&times;</span>
-                <h3>Issue Details</h3>
-                <pre id="issueDetailContent"></pre>
+                <div class="modal-header">
+                    <h3 id="modal-title-en" class="lang-content">Issue Details</h3>
+                    <h3 id="modal-title-zh" class="lang-content" style="display: none;">问题详情</h3>
+                    <button class="close-button" onclick="closeModal()">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <pre id="issueDetailContent"></pre>
+                </div>
             </div>
         </div>
     </div>
