@@ -28,12 +28,8 @@
         "to": "app/main_gui.py"
       },
       {
-        "from": "../android_log_analyzer/log_analyzer.py",
-        "to": "app/android_log_analyzer/log_analyzer.py"
-      },
-      {
-        "from": "../android_log_analyzer/__init__.py", 
-        "to": "app/android_log_analyzer/__init__.py"
+        "from": "../android_log_analyzer/",
+        "to": "app/android_log_analyzer/"
       }
     ],
     "linux": {

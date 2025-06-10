@@ -14,11 +14,29 @@ A comprehensive toolkit for analyzing Android logcat files to detect crashes, AN
 
 ## Features
 
+### 🔍 Core Analysis
 - **Multi-format Support**: Analyze `.log`, `.txt`, `.gz`, and `.zip` files
 - **Issue Detection**: Automatically detect Java crashes, ANRs, native crashes, system errors, and memory issues
-- **Flexible Output**: Console reports, JSON export, and optional GUI
+- **Complex Package Analysis**: Support for multi-file log packages and archives
 - **Performance Optimized**: Efficient parsing with optional parallel processing
-- **Configurable**: Customizable detection patterns and analysis settings
+
+### 📱 Platform-Specific Support
+- **SPRD/Unisoc Platform**: Specialized analysis for SPRD chipset logs
+- **YLog Package Support**: Native support for SPRD ylog format
+- **Multi-Subsystem Analysis**: Separate analysis for Android, Modem, Audio, Connectivity, and Sensor logs
+- **Platform Information Extraction**: Automatic detection of chipset, Android version, and build info
+
+### 🎨 Enhanced User Interface
+- **Modern GUI**: Responsive web interface with drag-and-drop support
+- **Bilingual Support**: Complete English/Chinese interface
+- **Subsystem Tabs**: Organized view of different log subsystems
+- **Interactive Timeline**: Chronological view of events across all subsystems
+- **Advanced Filtering**: Filter by subsystem, severity, and issue type
+
+### ⚙️ Advanced Features
+- **Configuration Management**: JSON-based configuration system
+- **Performance Monitoring**: Built-in analysis performance tracking
+- **Export Options**: JSON export and report generation
 - **Cross-platform**: Works on Windows, macOS, and Linux
 
 ## Quick Start
@@ -49,6 +67,22 @@ android-log-analyzer path/to/logcat.log --json-output report.json
 
 # Specify platform (future feature)
 android-log-analyzer path/to/logcat.log --platform mtk
+
+# Analyze complex log packages (NEW!)
+android-log-analyzer examples/sample_logs/ylog.zip
+```
+
+### Advanced Analysis (NEW!)
+
+```bash
+# Analyze SPRD ylog packages
+android-log-analyzer ylog.zip --platform sprd
+
+# Run advanced demo
+python demo_advanced.py
+
+# Test with sample files
+android-log-analyzer examples/sample_logs/ylog.zip --json-output ylog_results.json
 ```
 
 ## Advanced Usage
