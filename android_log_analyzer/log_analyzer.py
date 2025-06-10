@@ -36,6 +36,18 @@ except ImportError:
     INTELLIGENT_FEATURES_AVAILABLE = False
     logger.debug("Intelligent features not available")
 
+# Import ML features if available
+try:
+    from .ml import create_ml_analyzer, get_ml_capabilities, ML_DEPENDENCIES_AVAILABLE
+    from .ml.models.crash_classifier import CrashClassifier
+    from .ml.models.anomaly_detector import AnomalyDetector
+    from .ml.models.pattern_recognizer import PatternRecognizer
+    ML_FEATURES_AVAILABLE = True
+    logger.info("ML features loaded successfully")
+except ImportError:
+    ML_FEATURES_AVAILABLE = False
+    logger.debug("ML features not available")
+
 # --- Configuration for Issue Detection ---
 
 # ISSUE_PATTERNS defines the rules for detecting various log issues.
@@ -942,6 +954,247 @@ def _get_issue_message(issue: Dict[str, Any]) -> str:
         return trigger_line.message
 
     return issue.get('type', 'Unknown issue')
+
+
+def analyze_with_ml(log_lines: List[str]) -> Dict[str, Any]:
+    """
+    Perform ML-enhanced analysis on log lines
+
+    Args:
+        log_lines: List of log lines to analyze
+
+    Returns:
+        Dictionary with ML analysis results
+    """
+    if not ML_FEATURES_AVAILABLE:
+        logger.warning("ML features not available for enhanced analysis")
+        return {'ml_available': False}
+
+    try:
+        # Create ML analyzer
+        ml_analyzer = create_ml_analyzer()
+
+        results = {
+            'ml_available': True,
+            'crash_classifications': [],
+            'anomalies': [],
+            'patterns': [],
+            'ml_insights': {}
+        }
+
+        # Crash classification
+        if 'crash_classifier' in ml_analyzer:
+            classifier = ml_analyzer['crash_classifier']
+
+            # Find potential crash lines
+            crash_lines = [line for line in log_lines
+                          if any(keyword in line.lower()
+                                for keyword in ['exception', 'fatal', 'crash', 'abort'])]
+
+            for crash_line in crash_lines[:10]:  # Limit to first 10 crashes
+                prediction = classifier.classify_crash(crash_line)
+                results['crash_classifications'].append({
+                    'line': crash_line,
+                    'prediction': {
+                        'crash_type': prediction.crash_type,
+                        'confidence': prediction.confidence,
+                        'severity': prediction.severity,
+                        'description': prediction.description,
+                        'recommendations': prediction.recommendations
+                    }
+                })
+
+        # Anomaly detection
+        if 'anomaly_detector' in ml_analyzer:
+            detector = ml_analyzer['anomaly_detector']
+            anomalies = detector.detect_anomalies(log_lines)
+
+            for anomaly in anomalies:
+                results['anomalies'].append({
+                    'is_anomaly': anomaly.is_anomaly,
+                    'score': anomaly.anomaly_score,
+                    'type': anomaly.anomaly_type,
+                    'description': anomaly.description,
+                    'severity': anomaly.severity,
+                    'recommendations': anomaly.recommendations
+                })
+
+        # Pattern recognition
+        if 'pattern_recognizer' in ml_analyzer:
+            recognizer = ml_analyzer['pattern_recognizer']
+            patterns = recognizer.recognize_patterns(log_lines)
+
+            for pattern in patterns:
+                results['patterns'].append({
+                    'pattern_id': pattern.pattern_id,
+                    'type': pattern.pattern_type,
+                    'description': pattern.description,
+                    'frequency': pattern.frequency,
+                    'confidence': pattern.confidence,
+                    'severity': pattern.severity,
+                    'examples': pattern.examples,
+                    'recommendations': pattern.recommendations
+                })
+
+            # Get pattern statistics
+            if patterns:
+                results['ml_insights']['pattern_stats'] = recognizer.get_pattern_statistics(patterns)
+
+        # Generate ML insights
+        results['ml_insights'].update(_generate_ml_insights(results))
+
+        logger.info(f"ML analysis completed: {len(results['crash_classifications'])} crashes, "
+                   f"{len(results['anomalies'])} anomalies, {len(results['patterns'])} patterns")
+
+        return results
+
+    except Exception as e:
+        logger.error(f"ML analysis failed: {e}")
+        return {'ml_available': False, 'error': str(e)}
+
+
+def _generate_ml_insights(ml_results: Dict[str, Any]) -> Dict[str, Any]:
+    """Generate high-level insights from ML analysis results"""
+    insights = {}
+
+    # Crash insights
+    crashes = ml_results.get('crash_classifications', [])
+    if crashes:
+        crash_types = [c['prediction']['crash_type'] for c in crashes]
+        crash_severities = [c['prediction']['severity'] for c in crashes]
+
+        insights['crash_insights'] = {
+            'total_crashes': len(crashes),
+            'most_common_type': max(set(crash_types), key=crash_types.count) if crash_types else None,
+            'critical_crashes': sum(1 for s in crash_severities if s == 'critical'),
+            'avg_confidence': sum(c['prediction']['confidence'] for c in crashes) / len(crashes)
+        }
+
+    # Anomaly insights
+    anomalies = ml_results.get('anomalies', [])
+    if anomalies:
+        anomaly_types = [a['type'] for a in anomalies]
+        anomaly_severities = [a['severity'] for a in anomalies]
+
+        insights['anomaly_insights'] = {
+            'total_anomalies': len(anomalies),
+            'most_common_type': max(set(anomaly_types), key=anomaly_types.count) if anomaly_types else None,
+            'critical_anomalies': sum(1 for s in anomaly_severities if s == 'critical'),
+            'avg_score': sum(a['score'] for a in anomalies) / len(anomalies)
+        }
+
+    # Pattern insights
+    patterns = ml_results.get('patterns', [])
+    if patterns:
+        pattern_types = [p['type'] for p in patterns]
+        pattern_severities = [p['severity'] for p in patterns]
+
+        insights['pattern_insights'] = {
+            'total_patterns': len(patterns),
+            'most_common_type': max(set(pattern_types), key=pattern_types.count) if pattern_types else None,
+            'high_frequency_patterns': sum(1 for p in patterns if p['frequency'] > 5),
+            'avg_confidence': sum(p['confidence'] for p in patterns) / len(patterns)
+        }
+
+    # Overall health score
+    total_issues = len(crashes) + len(anomalies) + len(patterns)
+    critical_issues = (insights.get('crash_insights', {}).get('critical_crashes', 0) +
+                      insights.get('anomaly_insights', {}).get('critical_anomalies', 0))
+
+    if total_issues > 0:
+        health_score = max(0, 100 - (critical_issues * 20) - (total_issues * 2))
+        insights['health_score'] = min(100, health_score)
+    else:
+        insights['health_score'] = 100
+
+    return insights
+
+
+def get_ml_enhanced_report(log_file_path: Union[str, Path]) -> Dict[str, Any]:
+    """
+    Generate ML-enhanced analysis report for a log file
+
+    Args:
+        log_file_path: Path to log file
+
+    Returns:
+        Enhanced analysis report with ML insights
+    """
+    try:
+        # Read log file
+        log_lines = []
+        for line in iter_log_lines(log_file_path):
+            log_lines.append(line)
+
+        # Perform standard analysis
+        standard_issues = read_log_file(log_file_path)
+
+        # Perform ML analysis
+        ml_results = analyze_with_ml(log_lines)
+
+        # Combine results
+        enhanced_report = {
+            'file_path': str(log_file_path),
+            'total_lines': len(log_lines),
+            'standard_analysis': {
+                'issues': standard_issues,
+                'issue_count': len(standard_issues)
+            },
+            'ml_analysis': ml_results,
+            'enhanced_insights': {}
+        }
+
+        # Generate enhanced insights
+        if ml_results.get('ml_available'):
+            enhanced_report['enhanced_insights'] = _combine_standard_and_ml_insights(
+                standard_issues, ml_results
+            )
+
+        return enhanced_report
+
+    except Exception as e:
+        logger.error(f"Enhanced analysis failed: {e}")
+        return {'error': str(e)}
+
+
+def _combine_standard_and_ml_insights(standard_issues: List[Dict[str, Any]],
+                                    ml_results: Dict[str, Any]) -> Dict[str, Any]:
+    """Combine insights from standard and ML analysis"""
+    insights = {
+        'analysis_summary': {
+            'standard_issues': len(standard_issues),
+            'ml_crashes': len(ml_results.get('crash_classifications', [])),
+            'ml_anomalies': len(ml_results.get('anomalies', [])),
+            'ml_patterns': len(ml_results.get('patterns', []))
+        }
+    }
+
+    # Cross-reference standard issues with ML classifications
+    ml_crashes = ml_results.get('crash_classifications', [])
+    if standard_issues and ml_crashes:
+        insights['correlation'] = {
+            'standard_vs_ml_crashes': {
+                'standard_count': len([i for i in standard_issues if 'crash' in i.get('type', '').lower()]),
+                'ml_count': len(ml_crashes),
+                'correlation_score': min(1.0, len(ml_crashes) / max(len(standard_issues), 1))
+            }
+        }
+
+    # Priority recommendations based on combined analysis
+    recommendations = []
+
+    if ml_results.get('ml_insights', {}).get('health_score', 100) < 70:
+        recommendations.append("System health score is low - immediate attention required")
+
+    if len(ml_results.get('anomalies', [])) > 5:
+        recommendations.append("Multiple anomalies detected - investigate system stability")
+
+    if len(ml_results.get('patterns', [])) > 10:
+        recommendations.append("Many recurring patterns found - consider optimization")
+
+    insights['recommendations'] = recommendations
+
+    return insights
 
 
 if __name__ == "__main__":
