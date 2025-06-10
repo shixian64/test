@@ -1,4 +1,4 @@
-# Android Log Analyzer / Android 日志分析器
+# Android Log Analyzer
 
 <div align="center">
 
@@ -6,88 +6,11 @@
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Tests](https://img.shields.io/badge/tests-passing-brightgreen.svg)](tests/)
 
-<div id="language-toggle">
-  <button onclick="toggleLanguage('en')" id="btn-en" class="lang-btn active">English</button>
-  <button onclick="toggleLanguage('zh')" id="btn-zh" class="lang-btn">中文</button>
-</div>
+**Language / 语言**: [English](README.md) | [中文](README_zh-CN.md)
 
 </div>
-
-<div id="content-en" class="lang-content">
 
 A comprehensive toolkit for analyzing Android logcat files to detect crashes, ANRs, memory issues, and other critical problems. The project includes a Python library, command-line interface, and optional Electron-based GUI.
-
-</div>
-
-<div id="content-zh" class="lang-content" style="display: none;">
-
-一个全面的 Android logcat 文件分析工具包，用于检测崩溃、ANR、内存问题和其他关键问题。该项目包括 Python 库、命令行界面和可选的基于 Electron 的 GUI。
-
-</div>
-
-<style>
-.lang-btn {
-  padding: 8px 16px;
-  margin: 0 4px;
-  border: 1px solid #ddd;
-  background: #f8f9fa;
-  cursor: pointer;
-  border-radius: 4px;
-  transition: all 0.3s ease;
-}
-
-.lang-btn.active {
-  background: #007bff;
-  color: white;
-  border-color: #007bff;
-}
-
-.lang-btn:hover {
-  background: #e9ecef;
-}
-
-.lang-btn.active:hover {
-  background: #0056b3;
-}
-
-.lang-content {
-  margin-top: 20px;
-}
-</style>
-
-<script>
-function toggleLanguage(lang) {
-  // Get all language content elements
-  const enElements = document.querySelectorAll('[id*="-en"]');
-  const zhElements = document.querySelectorAll('[id*="-zh"]');
-  const enBtn = document.getElementById('btn-en');
-  const zhBtn = document.getElementById('btn-zh');
-
-  if (lang === 'en') {
-    // Show English content
-    enElements.forEach(el => el.style.display = 'block');
-    zhElements.forEach(el => el.style.display = 'none');
-    enBtn.classList.add('active');
-    zhBtn.classList.remove('active');
-    localStorage.setItem('preferred-language', 'en');
-  } else {
-    // Show Chinese content
-    enElements.forEach(el => el.style.display = 'none');
-    zhElements.forEach(el => el.style.display = 'block');
-    enBtn.classList.remove('active');
-    zhBtn.classList.add('active');
-    localStorage.setItem('preferred-language', 'zh');
-  }
-}
-
-// Load preferred language on page load
-document.addEventListener('DOMContentLoaded', function() {
-  const preferredLang = localStorage.getItem('preferred-language') || 'en';
-  toggleLanguage(preferredLang);
-});
-</script>
-
-<div id="features-en" class="lang-content">
 
 ## Features
 
@@ -98,31 +21,14 @@ document.addEventListener('DOMContentLoaded', function() {
 - **Configurable**: Customizable detection patterns and analysis settings
 - **Cross-platform**: Works on Windows, macOS, and Linux
 
-</div>
-
-<div id="features-zh" class="lang-content" style="display: none;">
-
-## 功能特性
-
-- **多格式支持**: 分析 `.log`、`.txt`、`.gz` 和 `.zip` 文件
-- **问题检测**: 自动检测 Java 崩溃、ANR、原生崩溃、系统错误和内存问题
-- **灵活输出**: 控制台报告、JSON 导出和可选的 GUI
-- **性能优化**: 高效解析，支持可选的并行处理
-- **可配置**: 可自定义检测模式和分析设置
-- **跨平台**: 支持 Windows、macOS 和 Linux
-
-</div>
-
-<div id="quickstart-en" class="lang-content">
-
 ## Quick Start
 
 ### Installation
 
 ```bash
 # Install from source
-git clone https://github.com/example/android-log-analyzer.git
-cd android-log-analyzer
+git clone https://github.com/shixian64/test.git
+cd test
 pip install -e .
 
 # Or install development dependencies
@@ -144,42 +50,6 @@ android-log-analyzer path/to/logcat.log --json-output report.json
 # Specify platform (future feature)
 android-log-analyzer path/to/logcat.log --platform mtk
 ```
-
-</div>
-
-<div id="quickstart-zh" class="lang-content" style="display: none;">
-
-## 快速开始
-
-### 安装
-
-```bash
-# 从源码安装
-git clone https://github.com/example/android-log-analyzer.git
-cd android-log-analyzer
-pip install -e .
-
-# 或安装开发依赖
-pip install -e ".[dev]"
-```
-
-### 基本用法
-
-```bash
-# 分析单个日志文件
-android-log-analyzer path/to/logcat.log
-
-# 分析目录中的所有日志文件
-android-log-analyzer path/to/logs/
-
-# 将结果保存为 JSON
-android-log-analyzer path/to/logcat.log --json-output report.json
-
-# 指定平台（未来功能）
-android-log-analyzer path/to/logcat.log --platform mtk
-```
-
-</div>
 
 ## Advanced Usage
 
