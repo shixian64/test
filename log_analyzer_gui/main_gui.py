@@ -30,6 +30,7 @@ try:
     from android_log_analyzer.log_analyzer import read_log_file, get_structured_report_data, ISSUE_PATTERNS
     from android_log_analyzer.advanced_parser import AdvancedLogParser
     from android_log_analyzer.sprd_analyzer import SPRDLogAnalyzer
+    from pathlib import Path
     print("Successfully imported 'log_analyzer' components and advanced analyzers.")
 except ImportError as e:
     print(f"Error importing 'log_analyzer': {e}. Check paths and structure.")
