@@ -8,10 +8,23 @@ and various system-level errors (kernel panics, watchdog timeouts, etc.).
 It uses a configurable set of patterns (ISSUE_PATTERNS) to identify these issues
 and generates a summary report of its findings.
 """
-import re
-import argparse # For command-line interface
+import argparse
+import gzip
+import json
+import logging
 import os
-from collections import Counter # For summarizing issues
+import re
+import zipfile
+from collections import Counter
+from pathlib import Path
+from typing import Any, Dict, Iterator, List, Optional, Union
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 # --- Configuration for Issue Detection ---
 
@@ -31,7 +44,7 @@ from collections import Counter # For summarizing issues
 #
 # TODO: Future enhancement - Load platform-specific patterns (MTK, SPRD, Google) here,
 # potentially merging them with or overriding these defaults.
-ISSUE_PATTERNS = {
+ISSUE_PATTERNS: Dict[str, Any] = {
     "java_crash": {
         "tags": ["AndroidRuntime"], # Tag where Java crash signatures appear
         "message_keywords": ["FATAL EXCEPTION"], # Primary indicator of a Java crash
@@ -109,13 +122,21 @@ class LogEntry:
 
     Attributes:
         timestamp (str): The timestamp of the log entry (e.g., "03-26 10:00:00.123").
-        pid (int | None): Process ID, if available.
-        tid (int | None): Thread ID, if available.
+        pid (Optional[int]): Process ID, if available.
+        tid (Optional[int]): Thread ID, if available.
         level (str): Log level (e.g., "D", "E", "W").
         tag (str): The log tag (e.g., "ActivityManager").
         message (str): The actual log message content.
     """
-    def __init__(self, timestamp, pid, tid, level, tag, message):
+    def __init__(
+        self,
+        timestamp: str,
+        pid: Optional[int],
+        tid: Optional[int],
+        level: str,
+        tag: str,
+        message: str
+    ) -> None:
         self.timestamp = timestamp
         self.pid = pid
         self.tid = tid
@@ -123,11 +144,21 @@ class LogEntry:
         self.tag = tag
         self.message = message
 
-    def __str__(self):
+    def __str__(self) -> str:
         """Returns a string representation of the LogEntry object."""
-        return f"Timestamp: {self.timestamp}, PID: {self.pid}, TID: {self.tid}, Level: {self.level}, Tag: {self.tag}, Message: {self.message}"
+        return (
+            f"Timestamp: {self.timestamp}, PID: {self.pid}, TID: {self.tid}, "
+            f"Level: {self.level}, Tag: {self.tag}, Message: {self.message}"
+        )
 
-def parse_log_line(line):
+    def __repr__(self) -> str:
+        """Returns a detailed string representation for debugging."""
+        return (
+            f"LogEntry(timestamp='{self.timestamp}', pid={self.pid}, tid={self.tid}, "
+            f"level='{self.level}', tag='{self.tag}', message='{self.message}')"
+        )
+
+def parse_log_line(line: str) -> Optional[LogEntry]:
     """
     Parses a single log line string into a LogEntry object.
 
@@ -137,77 +168,100 @@ def parse_log_line(line):
     It handles cases where PID or TID might be missing (common in kernel logs).
 
     Args:
-        line (str): The raw log line string.
+        line: The raw log line string.
 
     Returns:
-        LogEntry: A LogEntry object if parsing is successful.
-        None: If the line does not match the expected log format.
+        A LogEntry object if parsing is successful, None otherwise.
+
+    Raises:
+        ValueError: If the line format is completely invalid.
     """
-    # Regex breakdown:
-    # ^(?P<timestamp>\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3})  - Captures "MM-DD HH:MM:SS.mmm"
-    # \s+                                                 - One or more spaces
-    # (?P<pid>\d+)?                                       - Optional PID (digits)
-    # \s+                                                 - One or more spaces
-    # (?P<tid>\d+)?                                       - Optional TID (digits)
-    # \s+                                                 - One or more spaces
-    # (?P<level>[A-Z])                                    - Log level (single uppercase letter)
-    # \s+                                                 - One or more spaces
-    # (?P<tag>[^:]*)                                      - Log tag (any char except colon)
-    # :\s*                                                - Colon, followed by zero or more spaces
-    # (?P<message>.*)$                                    - The rest is the message
-    log_pattern = re.compile(
-        r"^(?P<timestamp>\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3})\s+"
-        r"(?P<pid>\d+)?\s+(?P<tid>\d+)?\s+"
-        r"(?P<level>[A-Z])\s+"
-        r"(?P<tag>[^:]*):\s*(?P<message>.*)$" 
-    )
-    match = log_pattern.match(line)
-    if match:
-        data = match.groupdict()
-        # Convert PID and TID to integers if they exist, otherwise None
-        pid = int(data["pid"]) if data["pid"] else None
-        tid = int(data["tid"]) if data["tid"] else None
-        return LogEntry(
-            timestamp=data["timestamp"],
-            pid=pid,
-            tid=tid,
-            level=data["level"],
-            tag=data["tag"].strip(), # Remove leading/trailing whitespace from tag
-            message=data["message"].strip() # Remove leading/trailing whitespace from message
+    try:
+        # Regex breakdown:
+        # ^(?P<timestamp>\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3})  - Captures "MM-DD HH:MM:SS.mmm"
+        # \s+                                                 - One or more spaces
+        # (?P<pid>\d+)?                                       - Optional PID (digits)
+        # \s+                                                 - One or more spaces
+        # (?P<tid>\d+)?                                       - Optional TID (digits)
+        # \s+                                                 - One or more spaces
+        # (?P<level>[A-Z])                                    - Log level (single uppercase letter)
+        # \s+                                                 - One or more spaces
+        # (?P<tag>[^:]*)                                      - Log tag (any char except colon)
+        # :\s*                                                - Colon, followed by zero or more spaces
+        # (?P<message>.*)$                                    - The rest is the message
+        log_pattern = re.compile(
+            r"^(?P<timestamp>\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3})\s+"
+            r"(?P<pid>\d+)?\s+(?P<tid>\d+)?\s+"
+            r"(?P<level>[A-Z])\s+"
+            r"(?P<tag>[^:]*):\s*(?P<message>.*)$"
         )
-    return None
+        match = log_pattern.match(line.strip())
+        if match:
+            data = match.groupdict()
+            # Convert PID and TID to integers if they exist, otherwise None
+            pid = int(data["pid"]) if data["pid"] else None
+            tid = int(data["tid"]) if data["tid"] else None
+            return LogEntry(
+                timestamp=data["timestamp"],
+                pid=pid,
+                tid=tid,
+                level=data["level"],
+                tag=data["tag"].strip(),  # Remove leading/trailing whitespace from tag
+                message=data["message"].strip()  # Remove leading/trailing whitespace from message
+            )
+        return None
+    except (ValueError, AttributeError) as e:
+        logger.debug(f"Failed to parse log line: {line[:100]}... Error: {e}")
+        return None
 
-def iter_log_lines(filepath):
-    """Yield log lines from plain text or compressed files (.gz or .zip)."""
-    import gzip
-    import zipfile
-    if filepath.lower().endswith(".gz"):
-        with gzip.open(filepath, "rt", encoding="utf-8", errors="ignore") as f:
-            for line in f:
-                yield line
-    elif filepath.lower().endswith(".zip"):
-        with zipfile.ZipFile(filepath) as z:
-            for name in z.namelist():
-                if not name.lower().endswith((".log", ".txt")):
-                    continue
-                with z.open(name) as f:
-                    for line in f:
-                        yield line.decode("utf-8", errors="ignore")
-    else:
-        with open(filepath, "r", encoding="utf-8", errors="ignore") as f:
-            for line in f:
-                yield line
+def iter_log_lines(filepath: Union[str, Path]) -> Iterator[str]:
+    """
+    Yield log lines from plain text or compressed files (.gz or .zip).
 
-def analyze_java_crash(log_entry):
+    Args:
+        filepath: Path to the log file (supports .log, .txt, .gz, .zip)
+
+    Yields:
+        str: Individual log lines
+
+    Raises:
+        FileNotFoundError: If the file doesn't exist
+        PermissionError: If the file can't be read
+        zipfile.BadZipFile: If zip file is corrupted
+    """
+    filepath = Path(filepath)
+
+    try:
+        if filepath.suffix.lower() == ".gz":
+            with gzip.open(filepath, "rt", encoding="utf-8", errors="ignore") as f:
+                for line in f:
+                    yield line.rstrip('\n\r')
+        elif filepath.suffix.lower() == ".zip":
+            with zipfile.ZipFile(filepath) as z:
+                for name in z.namelist():
+                    if not name.lower().endswith((".log", ".txt")):
+                        continue
+                    with z.open(name) as f:
+                        for line in f:
+                            yield line.decode("utf-8", errors="ignore").rstrip('\n\r')
+        else:
+            with open(filepath, "r", encoding="utf-8", errors="ignore") as f:
+                for line in f:
+                    yield line.rstrip('\n\r')
+    except Exception as e:
+        logger.error(f"Error reading file {filepath}: {e}")
+        raise
+
+def analyze_java_crash(log_entry: LogEntry) -> Optional[Dict[str, Any]]:
     """
     Analyzes a LogEntry to detect Java crashes based on defined patterns.
 
     Args:
-        log_entry (LogEntry): The parsed log entry to analyze.
+        log_entry: The parsed log entry to analyze.
 
     Returns:
-        dict: A dictionary with "type" and "trigger_line" if a Java crash is detected.
-        None: If no Java crash is detected.
+        A dictionary with "type" and "trigger_line" if a Java crash is detected,
+        None otherwise.
     """
     patterns = ISSUE_PATTERNS["java_crash"]
     # Check if the log entry's tag matches one of the tags specified for Java crashes
@@ -218,16 +272,16 @@ def analyze_java_crash(log_entry):
                 return {"type": "JavaCrash", "trigger_line": log_entry}
     return None
 
-def analyze_anr(log_entry):
+def analyze_anr(log_entry: LogEntry) -> Optional[Dict[str, Any]]:
     """
     Analyzes a LogEntry to detect ANR (Application Not Responding) errors.
 
     Args:
-        log_entry (LogEntry): The parsed log entry.
+        log_entry: The parsed log entry.
 
     Returns:
-        dict: A dictionary with ANR details ("type", "process_name", "reason", "trigger_line") if detected.
-        None: If no ANR is detected.
+        A dictionary with ANR details ("type", "process_name", "reason", "trigger_line")
+        if detected, None otherwise.
     """
     patterns = ISSUE_PATTERNS["anr"]
     if log_entry.tag in patterns["tags"]:
@@ -253,16 +307,15 @@ def analyze_anr(log_entry):
                 return extracted_data
     return None
 
-def analyze_native_crash_hint(log_entry):
+def analyze_native_crash_hint(log_entry: LogEntry) -> Optional[Dict[str, Any]]:
     """
     Analyzes a LogEntry for hints of native crashes (e.g., signals, tombstone headers).
 
     Args:
-        log_entry (LogEntry): The parsed log entry.
+        log_entry: The parsed log entry.
 
     Returns:
-        dict: Dictionary with native crash details if a hint is detected.
-        None: Otherwise.
+        Dictionary with native crash details if a hint is detected, None otherwise.
     """
     patterns = ISSUE_PATTERNS["native_crash_hint"]
     # Native crash indicators can be in specific tags OR identified by message keywords (like "*** ***")
@@ -298,16 +351,15 @@ def analyze_native_crash_hint(log_entry):
     return None
 
 
-def analyze_system_error(log_entry):
+def analyze_system_error(log_entry: LogEntry) -> Optional[Dict[str, Any]]:
     """
     Analyzes a LogEntry for various critical system errors (kernel, watchdog, etc.).
 
     Args:
-        log_entry (LogEntry): The parsed log entry.
+        log_entry: The parsed log entry.
 
     Returns:
-        dict: Dictionary with system error details if detected.
-        None: Otherwise.
+        Dictionary with system error details if detected, None otherwise.
     """
     system_patterns = ISSUE_PATTERNS["system_error"]
     for error_subtype, patterns in system_patterns.items():
@@ -326,8 +378,16 @@ def analyze_system_error(log_entry):
                     return {"type": "SystemError", "error_subtype": error_subtype, "trigger_line": log_entry}
     return None
 
-def analyze_memory_issue(log_entry):
-    """Analyze a LogEntry for low-memory or OOM kill messages."""
+def analyze_memory_issue(log_entry: LogEntry) -> Optional[Dict[str, Any]]:
+    """
+    Analyze a LogEntry for low-memory or OOM kill messages.
+
+    Args:
+        log_entry: The parsed log entry.
+
+    Returns:
+        Dictionary with memory issue details if detected, None otherwise.
+    """
     patterns = ISSUE_PATTERNS["memory_issue"]
     keyword_match = any(k.lower() in log_entry.message.lower() for k in patterns["message_keywords"])
 
@@ -344,81 +404,141 @@ def analyze_memory_issue(log_entry):
         return issue
     return None
 
-def read_log_file(filepath, issue_patterns_config):
+def read_log_file(
+    filepath: Union[str, Path],
+    issue_patterns_config: Optional[Dict[str, Any]] = None
+) -> List[Dict[str, Any]]:
     """
     Reads a log file line by line, parses each line into a LogEntry object,
     and then analyzes these entries for predefined issues.
 
     Args:
-        filepath (str): The path to the log file to be analyzed.
-        issue_patterns_config (dict): The configuration dictionary (ISSUE_PATTERNS) 
-                                      defining how to detect various issues. 
-                                      (Currently unused as analyzers access global ISSUE_PATTERNS).
+        filepath: The path to the log file to be analyzed.
+        issue_patterns_config: The configuration dictionary defining how to detect
+                              various issues. If None, uses global ISSUE_PATTERNS.
 
     Returns:
-        list: A list of dictionaries, where each dictionary represents a detected issue.
-              Returns an empty list if the file is not found or no issues are detected.
+        A list of dictionaries, where each dictionary represents a detected issue.
+        Returns an empty list if the file is not found or no issues are detected.
+
+    Raises:
+        FileNotFoundError: If the specified file doesn't exist.
+        PermissionError: If the file can't be read due to permissions.
     """
-    detected_issues = []
+    detected_issues: List[Dict[str, Any]] = []
+    filepath = Path(filepath)
+
+    if not filepath.exists():
+        raise FileNotFoundError(f"File not found: {filepath}")
+
+    if not filepath.is_file():
+        raise ValueError(f"Path is not a file: {filepath}")
+
+    # Use provided config or default
+    patterns_config = issue_patterns_config or ISSUE_PATTERNS
+
     try:
+        logger.info(f"Analyzing log file: {filepath}")
+        line_count = 0
+        parsed_count = 0
+
         for line_number, line_content in enumerate(iter_log_lines(filepath), 1):
+            line_count += 1
             line = line_content.strip()
             if not line:
                 continue  # Skip empty lines
 
             log_entry = parse_log_line(line)
             if not log_entry:
-                print(f"Warning: Could not parse line #{line_number}: {line}")
+                logger.debug(f"Could not parse line #{line_number}: {line[:100]}...")
                 continue
 
-            java_crash_info = analyze_java_crash(log_entry)
-            if java_crash_info:
-                detected_issues.append(java_crash_info)
+            parsed_count += 1
 
-            anr_info = analyze_anr(log_entry)
-            if anr_info:
-                detected_issues.append(anr_info)
+            # Analyze for different types of issues
+            analyzers = [
+                analyze_java_crash,
+                analyze_anr,
+                analyze_native_crash_hint,
+                analyze_system_error,
+                analyze_memory_issue,
+            ]
 
-            native_crash_info = analyze_native_crash_hint(log_entry)
-            if native_crash_info:
-                detected_issues.append(native_crash_info)
+            for analyzer in analyzers:
+                try:
+                    result = analyzer(log_entry)
+                    if result:
+                        detected_issues.append(result)
+                except Exception as e:
+                    logger.error(f"Error in analyzer {analyzer.__name__}: {e}")
 
-            system_error_info = analyze_system_error(log_entry)
-            if system_error_info:
-                detected_issues.append(system_error_info)
+        logger.info(f"Processed {line_count} lines, parsed {parsed_count} entries, found {len(detected_issues)} issues")
 
-            memory_issue_info = analyze_memory_issue(log_entry)
-            if memory_issue_info:
-                detected_issues.append(memory_issue_info)
-    except FileNotFoundError:
-        print(f"Error: File not found at path: {filepath}")
-        return detected_issues
     except Exception as e:
-        print(f"Error reading file {filepath}: {e}")
-        return detected_issues
+        logger.error(f"Error reading file {filepath}: {e}")
+        raise
 
     return detected_issues
 
-def read_logs_from_directory(directory, issue_patterns_config):
-    """Recursively read all log files within ``directory``."""
-    import os
-    all_issues = []
-    for root, _, files in os.walk(directory):
-        for name in files:
-            if name.lower().endswith((".log", ".txt", ".gz", ".zip")):
-                file_path = os.path.join(root, name)
-                all_issues.extend(read_log_file(file_path, issue_patterns_config))
+def read_logs_from_directory(
+    directory: Union[str, Path],
+    issue_patterns_config: Optional[Dict[str, Any]] = None
+) -> List[Dict[str, Any]]:
+    """
+    Recursively read all log files within the specified directory.
+
+    Args:
+        directory: Path to the directory containing log files.
+        issue_patterns_config: Configuration for issue detection patterns.
+
+    Returns:
+        List of detected issues from all log files.
+
+    Raises:
+        FileNotFoundError: If the directory doesn't exist.
+        PermissionError: If the directory can't be accessed.
+    """
+    directory = Path(directory)
+
+    if not directory.exists():
+        raise FileNotFoundError(f"Directory not found: {directory}")
+
+    if not directory.is_dir():
+        raise ValueError(f"Path is not a directory: {directory}")
+
+    all_issues: List[Dict[str, Any]] = []
+    supported_extensions = (".log", ".txt", ".gz", ".zip")
+
+    logger.info(f"Scanning directory: {directory}")
+
+    try:
+        for file_path in directory.rglob("*"):
+            if file_path.is_file() and file_path.suffix.lower() in supported_extensions:
+                logger.debug(f"Processing file: {file_path}")
+                try:
+                    issues = read_log_file(file_path, issue_patterns_config)
+                    all_issues.extend(issues)
+                except Exception as e:
+                    logger.error(f"Error processing file {file_path}: {e}")
+                    continue
+
+        logger.info(f"Found {len(all_issues)} total issues in directory")
+
+    except Exception as e:
+        logger.error(f"Error scanning directory {directory}: {e}")
+        raise
+
     return all_issues
 
-def get_structured_report_data(detected_issues):
+def get_structured_report_data(detected_issues: List[Dict[str, Any]]) -> Dict[str, Any]:
     """
     Processes a list of detected issues and returns a structured dictionary.
 
     Args:
-        detected_issues (list): A list of issue dictionaries.
+        detected_issues: A list of issue dictionaries.
 
     Returns:
-        dict: A dictionary containing 'summary_counts' and 'detailed_issues'.
+        A dictionary containing 'summary_counts' and 'detailed_issues'.
     """
     summary_counts = Counter(issue["type"] for issue in detected_issues)
     
@@ -446,26 +566,45 @@ def get_structured_report_data(detected_issues):
         "detailed_issues": detailed_issues_list
     }
 
-def save_report_to_json(detected_issues, output_path):
-    """Save the structured report data to a JSON file.
+def save_report_to_json(
+    detected_issues: List[Dict[str, Any]],
+    output_path: Union[str, Path]
+) -> None:
+    """
+    Save the structured report data to a JSON file.
 
     Args:
-        detected_issues (list): Issues returned by ``read_log_file``.
-        output_path (str): Path to the JSON file to be written.
+        detected_issues: Issues returned by read_log_file.
+        output_path: Path to the JSON file to be written.
+
+    Raises:
+        PermissionError: If the output file can't be written.
+        OSError: If there's an I/O error writing the file.
     """
-    import json
+    output_path = Path(output_path)
 
-    report_data = get_structured_report_data(detected_issues)
-    with open(output_path, "w", encoding="utf-8") as f:
-        json.dump(report_data, f, indent=2, ensure_ascii=False)
+    try:
+        report_data = get_structured_report_data(detected_issues)
 
-def generate_report(detected_issues):
+        # Ensure parent directory exists
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+
+        with open(output_path, "w", encoding="utf-8") as f:
+            json.dump(report_data, f, indent=2, ensure_ascii=False)
+
+        logger.info(f"Report saved to: {output_path}")
+
+    except Exception as e:
+        logger.error(f"Error saving report to {output_path}: {e}")
+        raise
+
+def generate_report(detected_issues: List[Dict[str, Any]]) -> None:
     """
     Generates and prints a structured textual report from the list of detected issues,
     using get_structured_report_data for data preparation.
 
     Args:
-        detected_issues (list): A list of issue dictionaries returned by the analyzer functions.
+        detected_issues: A list of issue dictionaries returned by the analyzer functions.
     """
     report_data = get_structured_report_data(detected_issues)
     summary_counts = report_data["summary_counts"]
@@ -527,8 +666,13 @@ def generate_report(detected_issues):
     print("\n===================")
 
 
-def main(argv=None):
-    """Command line entry point for the log analyzer."""
+def main(argv: Optional[List[str]] = None) -> None:
+    """
+    Command line entry point for the log analyzer.
+
+    Args:
+        argv: Command line arguments. If None, uses sys.argv.
+    """
     parser = argparse.ArgumentParser(
         description="Analyze Android log files for common critical issues.",
         formatter_class=argparse.RawTextHelpFormatter,
@@ -558,24 +702,42 @@ def main(argv=None):
     )
     args = parser.parse_args(argv)
 
-    # Placeholder for platform-specific logic (not yet implemented)
-    print(
-        f"Info: Analyzing for platform '{args.platform}'. (Note: Platform-specific patterns are a future enhancement.)"
-    )
+    # Configure logging level based on verbosity
+    if hasattr(args, 'verbose') and args.verbose:
+        logging.getLogger().setLevel(logging.DEBUG)
 
-    if os.path.isdir(args.logfile):
-        detected_issues = read_logs_from_directory(args.logfile, ISSUE_PATTERNS)
-    else:
-        detected_issues = read_log_file(args.logfile, ISSUE_PATTERNS)
+    try:
+        # Placeholder for platform-specific logic (not yet implemented)
+        logger.info(f"Analyzing for platform '{args.platform}'. "
+                   "(Note: Platform-specific patterns are a future enhancement.)")
 
-    if args.json_output:
-        try:
-            save_report_to_json(detected_issues, args.json_output)
-            print(f"JSON report written to {args.json_output}")
-        except Exception as e:
-            print(f"Error writing JSON report: {e}")
+        # Determine if input is directory or file
+        input_path = Path(args.logfile)
+        if input_path.is_dir():
+            detected_issues = read_logs_from_directory(input_path, ISSUE_PATTERNS)
+        elif input_path.is_file():
+            detected_issues = read_log_file(input_path, ISSUE_PATTERNS)
+        else:
+            logger.error(f"Input path does not exist or is not accessible: {input_path}")
+            return
 
-    generate_report(detected_issues)
+        # Save JSON report if requested
+        if args.json_output:
+            try:
+                save_report_to_json(detected_issues, args.json_output)
+                print(f"JSON report written to {args.json_output}")
+            except Exception as e:
+                logger.error(f"Error writing JSON report: {e}")
+                return
+
+        # Generate and display text report
+        generate_report(detected_issues)
+
+    except KeyboardInterrupt:
+        logger.info("Analysis interrupted by user")
+    except Exception as e:
+        logger.error(f"Unexpected error during analysis: {e}")
+        raise
 
 
 if __name__ == "__main__":
