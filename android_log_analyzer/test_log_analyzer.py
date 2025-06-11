@@ -21,6 +21,7 @@ from .log_analyzer import (
     save_report_to_json,
 )
 
+
 class TestLogParsing(unittest.TestCase):
 
     def test_parse_valid_line(self):
@@ -39,7 +40,7 @@ class TestLogParsing(unittest.TestCase):
         log_entry = parse_log_line(line)
         self.assertIsNotNone(log_entry)
         self.assertEqual(log_entry.timestamp, "03-26 10:00:02.789")
-        self.assertEqual(log_entry.pid, 0) 
+        self.assertEqual(log_entry.pid, 0)
         self.assertEqual(log_entry.tid, 0)
         self.assertEqual(log_entry.level, "W")
         self.assertEqual(log_entry.tag, "Kernel")
@@ -57,9 +58,14 @@ class TestLogParsing(unittest.TestCase):
         # A line like "03-26 10:00:05.222 V VerboseTag: This is a verbose message" (fewer spaces)
         # However, the current regex expects at least some space for pid and tid.
         # Let's try a line with only level, tag, message (pid/tid spaces present but no numbers)
-        line_no_pid_tid_val = "03-26 10:00:05.222       V VerboseTag: This is a verbose message"
+        line_no_pid_tid_val = (
+            "03-26 10:00:05.222       V VerboseTag: This is a verbose message"
+        )
         log_entry_no_val = parse_log_line(line_no_pid_tid_val)
-        self.assertIsNotNone(log_entry_no_val, "Should parse even if PID/TID numbers are missing but spaces are there")
+        self.assertIsNotNone(
+            log_entry_no_val,
+            "Should parse even if PID/TID numbers are missing but spaces are there",
+        )
         self.assertEqual(log_entry_no_val.pid, None)
         self.assertEqual(log_entry_no_val.tid, None)
         self.assertEqual(log_entry_no_val.level, "V")
@@ -72,13 +78,12 @@ class TestLogParsing(unittest.TestCase):
         self.assertEqual(log_entry_pid_no_tid.pid, 123)
         self.assertIsNone(log_entry_pid_no_tid.tid, "TID should be None if not present")
 
-
     def test_parse_line_missing_message(self):
         line = "03-26 10:00:06.333  4567  8901 D EmptyTag:"
         log_entry = parse_log_line(line)
         self.assertIsNotNone(log_entry)
         self.assertEqual(log_entry.tag, "EmptyTag")
-        self.assertEqual(log_entry.message, "") # Message should be empty string
+        self.assertEqual(log_entry.message, "")  # Message should be empty string
 
     def test_parse_invalid_line(self):
         line = "This is not a valid logcat line"
@@ -92,9 +97,10 @@ class TestLogParsing(unittest.TestCase):
         # Assuming the spec means the core log content can be parsed even if the line has whitespace
         # and the parser should ideally strip it before regex matching.
         # For now, this test reflects the current behavior.
-        log_entry = parse_log_line(line.strip()) # Simulate stripping before parsing
+        log_entry = parse_log_line(line.strip())  # Simulate stripping before parsing
         self.assertIsNotNone(log_entry)
         self.assertEqual(log_entry.timestamp, "03-26 10:00:00.123")
+
 
 class TestIssueAnalyzers(unittest.TestCase):
 
@@ -127,7 +133,7 @@ class TestIssueAnalyzers(unittest.TestCase):
         self.assertIsNotNone(result)
         self.assertEqual(result["type"], "ANR")
         self.assertEqual(result["process_name"], "com.example.slowapp")
-        self.assertIsNone(result["reason"]) # No reason in this specific line
+        self.assertIsNone(result["reason"])  # No reason in this specific line
 
     def test_anr_with_reason_detected(self):
         line = "02-15 11:05:00.123  1001  1025 W ActivityManager: ANR in com.another.app (com.another.app/.MainActivity), reason: Input dispatching timed out"
@@ -138,7 +144,7 @@ class TestIssueAnalyzers(unittest.TestCase):
         self.assertEqual(result["type"], "ANR")
         self.assertEqual(result["process_name"], "com.another.app")
         self.assertEqual(result["reason"], "Input dispatching timed out")
-        
+
     def test_anr_process_name_fallback(self):
         # Test the fallback for process name if the specific regex fails but "ANR in" is present
         # This scenario is a bit artificial as the main regex should usually capture it.
@@ -149,9 +155,10 @@ class TestIssueAnalyzers(unittest.TestCase):
         result = analyze_anr(log_entry)
         self.assertIsNotNone(result)
         self.assertEqual(result["type"], "ANR")
-        self.assertEqual(result["process_name"], "io.appium.uiautomator2.server") # Fallback should catch this
+        self.assertEqual(
+            result["process_name"], "io.appium.uiautomator2.server"
+        )  # Fallback should catch this
         self.assertIsNone(result["reason"])
-
 
     def test_anr_not_detected(self):
         line = "03-26 10:00:00.123  1234  5678 D MyActivity: onCreate"
@@ -174,7 +181,6 @@ class TestIssueAnalyzers(unittest.TestCase):
         # The sample line message is "Fatal signal ... in tid ... pid ..." which is not what the regex is looking for
         self.assertIsNone(result["process_info"])
 
-
     def test_native_crash_detected_stars_header(self):
         line = "03-01 10:30:05.123 12345 12345 F DEBUG   : *** *** *** *** *** *** *** *** *** *** *** *** *** *** *** ***"
         log_entry = self._create_log_entry(line)
@@ -189,13 +195,17 @@ class TestIssueAnalyzers(unittest.TestCase):
         self.assertIsNotNone(log_entry)
         result = analyze_native_crash_hint(log_entry)
         self.assertIsNone(result)
-        
+
     def test_native_crash_signal_only(self):
         line = "03-01 10:30:05.124 12345 12345 I random_tag: Some message with signal 11 (SIGSEGV) in it"
         log_entry = self._create_log_entry(line)
-        self.assertIsNotNone(log_entry) # Line is parsable
-        result = analyze_native_crash_hint(log_entry) # Should not detect for non-DEBUG/libc/bionic tags unless "***"
-        self.assertIsNone(result) # ISSUE_PATTERNS["native_crash_hint"]["tags"] are DEBUG, libc, bionic
+        self.assertIsNotNone(log_entry)  # Line is parsable
+        result = analyze_native_crash_hint(
+            log_entry
+        )  # Should not detect for non-DEBUG/libc/bionic tags unless "***"
+        self.assertIsNone(
+            result
+        )  # ISSUE_PATTERNS["native_crash_hint"]["tags"] are DEBUG, libc, bionic
 
         line_debug = "03-01 10:30:05.124 12345 12345 F DEBUG: Some message with signal 11 (SIGSEGV) in it"
         log_entry_debug = self._create_log_entry(line_debug)
@@ -204,7 +214,6 @@ class TestIssueAnalyzers(unittest.TestCase):
         self.assertIsNotNone(result_debug)
         self.assertEqual(result_debug["type"], "NativeCrashHint")
         self.assertEqual(result_debug["signal_info"], "signal 11 (SIGSEGV)")
-
 
     # --- System Error Tests ---
     def test_system_error_kernel_panic(self):
@@ -224,7 +233,7 @@ class TestIssueAnalyzers(unittest.TestCase):
         self.assertIsNotNone(result)
         self.assertEqual(result["type"], "SystemError")
         self.assertEqual(result["error_subtype"], "watchdog")
-        
+
     def test_system_error_system_server_crash(self):
         line = "03-02 11:15:00.000  1000  1000 E SystemServer: System server crashed!"
         log_entry = self._create_log_entry(line)
@@ -244,7 +253,6 @@ class TestIssueAnalyzers(unittest.TestCase):
         self.assertIsNotNone(result)
         self.assertEqual(result["type"], "SystemError")
         self.assertEqual(result["error_subtype"], "misc_critical")
-
 
     def test_system_error_not_detected(self):
         line = "03-26 10:00:00.123  1234  5678 D MyActivity: onCreate"
@@ -286,7 +294,10 @@ class TestReadLogFile(unittest.TestCase):
 class TestJsonOutput(unittest.TestCase):
     def test_save_report_to_json(self):
         sample_issues = [
-            {"type": "JavaCrash", "trigger_line": LogEntry("t", 1, 1, "E", "Tag", "msg")}
+            {
+                "type": "JavaCrash",
+                "trigger_line": LogEntry("t", 1, 1, "E", "Tag", "msg"),
+            }
         ]
         with tempfile.NamedTemporaryFile(delete=False, suffix=".json") as tmp:
             tmp_path = tmp.name
@@ -300,11 +311,14 @@ class TestJsonOutput(unittest.TestCase):
         finally:
             os.remove(tmp_path)
 
+
 class TestExtendedReading(unittest.TestCase):
     def test_read_log_file_gzip(self):
         log_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "test.log")
         with tempfile.NamedTemporaryFile(delete=False, suffix=".gz") as tmp:
-            with gzip.open(tmp.name, "wt", encoding="utf-8") as gz, open(log_path, "r", encoding="utf-8") as src:
+            with gzip.open(tmp.name, "wt", encoding="utf-8") as gz, open(
+                log_path, "r", encoding="utf-8"
+            ) as src:
                 gz.write(src.read())
             tmp_path = tmp.name
         try:
@@ -327,5 +341,6 @@ class TestExtendedReading(unittest.TestCase):
         finally:
             shutil.rmtree(temp_dir)
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     unittest.main(verbosity=2)

@@ -8,6 +8,7 @@ and various system-level errors (kernel panics, watchdog timeouts, etc.).
 It uses a configurable set of patterns (ISSUE_PATTERNS) to identify these issues
 and generates a summary report of its findings.
 """
+
 import argparse
 import gzip
 import json
@@ -21,8 +22,7 @@ from typing import Any, Dict, Iterator, List, Optional, Union
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
 
@@ -30,6 +30,7 @@ logger = logging.getLogger(__name__)
 try:
     from .intelligent.smart_search import SmartSearchEngine
     from .intelligent.priority_scorer import IssuePriorityScorer, IssueContext
+
     INTELLIGENT_FEATURES_AVAILABLE = True
     logger.info("Intelligent features loaded successfully")
 except ImportError:
@@ -42,6 +43,7 @@ try:
     from .ml.models.crash_classifier import CrashClassifier
     from .ml.models.anomaly_detector import AnomalyDetector
     from .ml.models.pattern_recognizer import PatternRecognizer
+
     ML_FEATURES_AVAILABLE = True
     logger.info("ML features loaded successfully")
 except ImportError:
@@ -68,56 +70,75 @@ except ImportError:
 # potentially merging them with or overriding these defaults.
 ISSUE_PATTERNS: Dict[str, Any] = {
     "java_crash": {
-        "tags": ["AndroidRuntime"], # Tag where Java crash signatures appear
-        "message_keywords": ["FATAL EXCEPTION"], # Primary indicator of a Java crash
+        "tags": ["AndroidRuntime"],  # Tag where Java crash signatures appear
+        "message_keywords": ["FATAL EXCEPTION"],  # Primary indicator of a Java crash
     },
     "anr": {
-        "tags": ["ActivityManager"], # Tag for ANR messages
-        "message_keywords": ["ANR in"], # Common start of an ANR message
+        "tags": ["ActivityManager"],  # Tag for ANR messages
+        "message_keywords": ["ANR in"],  # Common start of an ANR message
         "extractors": {
             # Regex to capture the process name involved in the ANR
-            "process_name": r"ANR in ([^ ]+)", 
+            "process_name": r"ANR in ([^ ]+)",
             # Regex to capture the reason for the ANR (often follows "reason:")
-            "reason": r"reason: (.*)" 
-        }
+            "reason": r"reason: (.*)",
+        },
     },
     "native_crash_hint": {
-        "tags": ["DEBUG", "libc", "bionic"], # Tags often associated with native crashes
+        "tags": [
+            "DEBUG",
+            "libc",
+            "bionic",
+        ],  # Tags often associated with native crashes
         # Keywords indicating a native crash (e.g., signal info or crash dump header)
         "message_keywords": ["Fatal signal", "*** ***"],
         "extractors": {
             # Regex to capture signal information (e.g., "Fatal signal 11 (SIGSEGV)")
             "signal_info": r"(Fatal signal \d+ \(SIG[A-Z]+\)|signal \d+ \(SIG[A-Z]+\))",
             # Regex to capture process/thread ID and name (e.g., "pid: 123, tid: 456, name: com.example.app")
-            "process_info": r"(pid: \d+, tid: \d+, name: [^ ]+ >>> [^ ]+ <<<|pid: \d+, tid: \d+, name: [^ ]+)"
-        }
+            "process_info": r"(pid: \d+, tid: \d+, name: [^ ]+ >>> [^ ]+ <<<|pid: \d+, tid: \d+, name: [^ ]+)",
+        },
     },
     "memory_issue": {
         "tags": ["lowmemorykiller", "ActivityManager", "kernel"],
-        "message_keywords": ["Low memory", "low memory", "Out of memory", "Killed process", "Killing"],
+        "message_keywords": [
+            "Low memory",
+            "low memory",
+            "Out of memory",
+            "Killed process",
+            "Killing",
+        ],
         "extractors": {
             "killed_process": r"(?:Killed process \d+ \(([^)]+)\)|Killing '([^']+)')",
-            "oom_reason": r"(Out of memory|[Ll]ow memory)"
-        }
+            "oom_reason": r"(Out of memory|[Ll]ow memory)",
+        },
     },
-    "system_error": { # Grouping for various low-level system issues
+    "system_error": {  # Grouping for various low-level system issues
         "kernel_panic": {
             "tags": ["kernel"],
-            "message_keywords": ["Kernel panic", "BUG:", "Oops"] # Indicators of kernel issues
+            "message_keywords": [
+                "Kernel panic",
+                "BUG:",
+                "Oops",
+            ],  # Indicators of kernel issues
         },
         "watchdog": {
-            "tags": ["watchdog"], 
-            "message_keywords": ["Watchdog triggered", "!@SyncMonitor"] # Watchdog timeout indicators
+            "tags": ["watchdog"],
+            "message_keywords": [
+                "Watchdog triggered",
+                "!@SyncMonitor",
+            ],  # Watchdog timeout indicators
         },
         "system_server_crash": {
-            "tags": ["SystemServer"], 
-            "message_keywords": ["crashed"] # Indication that SystemServer process has crashed
+            "tags": ["SystemServer"],
+            "message_keywords": [
+                "crashed"
+            ],  # Indication that SystemServer process has crashed
         },
-        "misc_critical": { # For other critical hardware/system messages
-            "tags": [], # Empty means check any tag for these keywords
-            "message_keywords": ["HAL frozen", "modem crashed", "DSP failure"]
-        }
-    }
+        "misc_critical": {  # For other critical hardware/system messages
+            "tags": [],  # Empty means check any tag for these keywords
+            "message_keywords": ["HAL frozen", "modem crashed", "DSP failure"],
+        },
+    },
 }
 
 # Pre-compile regexes in ISSUE_PATTERNS for efficiency.
@@ -131,11 +152,11 @@ for issue_type, patterns in ISSUE_PATTERNS.items():
             else:
                 patterns["extractors"][key] = re.compile(regex_str)
     # Pre-compile for nested system_error patterns as well (if they had extractors)
-    if issue_type == "system_error": 
+    if issue_type == "system_error":
         for sub_type, sub_patterns in patterns.items():
-            if "extractors" in sub_patterns: 
+            if "extractors" in sub_patterns:
                 for key, regex_str in sub_patterns["extractors"].items():
-                     sub_patterns["extractors"][key] = re.compile(regex_str)
+                    sub_patterns["extractors"][key] = re.compile(regex_str)
 
 
 class LogEntry:
@@ -150,6 +171,7 @@ class LogEntry:
         tag (str): The log tag (e.g., "ActivityManager").
         message (str): The actual log message content.
     """
+
     def __init__(
         self,
         timestamp: str,
@@ -157,7 +179,7 @@ class LogEntry:
         tid: Optional[int],
         level: str,
         tag: str,
-        message: str
+        message: str,
     ) -> None:
         self.timestamp = timestamp
         self.pid = pid
@@ -179,6 +201,7 @@ class LogEntry:
             f"LogEntry(timestamp='{self.timestamp}', pid={self.pid}, tid={self.tid}, "
             f"level='{self.level}', tag='{self.tag}', message='{self.message}')"
         )
+
 
 def parse_log_line(line: str) -> Optional[LogEntry]:
     """
@@ -229,12 +252,15 @@ def parse_log_line(line: str) -> Optional[LogEntry]:
                 tid=tid,
                 level=data["level"],
                 tag=data["tag"].strip(),  # Remove leading/trailing whitespace from tag
-                message=data["message"].strip()  # Remove leading/trailing whitespace from message
+                message=data[
+                    "message"
+                ].strip(),  # Remove leading/trailing whitespace from message
             )
         return None
     except (ValueError, AttributeError) as e:
         logger.debug(f"Failed to parse log line: {line[:100]}... Error: {e}")
         return None
+
 
 def iter_log_lines(filepath: Union[str, Path]) -> Iterator[str]:
     """
@@ -257,7 +283,7 @@ def iter_log_lines(filepath: Union[str, Path]) -> Iterator[str]:
         if filepath.suffix.lower() == ".gz":
             with gzip.open(filepath, "rt", encoding="utf-8", errors="ignore") as f:
                 for line in f:
-                    yield line.rstrip('\n\r')
+                    yield line.rstrip("\n\r")
         elif filepath.suffix.lower() == ".zip":
             with zipfile.ZipFile(filepath) as z:
                 for name in z.namelist():
@@ -265,14 +291,15 @@ def iter_log_lines(filepath: Union[str, Path]) -> Iterator[str]:
                         continue
                     with z.open(name) as f:
                         for line in f:
-                            yield line.decode("utf-8", errors="ignore").rstrip('\n\r')
+                            yield line.decode("utf-8", errors="ignore").rstrip("\n\r")
         else:
             with open(filepath, "r", encoding="utf-8", errors="ignore") as f:
                 for line in f:
-                    yield line.rstrip('\n\r')
+                    yield line.rstrip("\n\r")
     except Exception as e:
         logger.error(f"Error reading file {filepath}: {e}")
         raise
+
 
 def analyze_java_crash(log_entry: LogEntry) -> Optional[Dict[str, Any]]:
     """
@@ -290,9 +317,10 @@ def analyze_java_crash(log_entry: LogEntry) -> Optional[Dict[str, Any]]:
     if log_entry.tag in patterns["tags"]:
         # Check if any of the specified keywords are present in the log message
         for keyword in patterns["message_keywords"]:
-            if keyword in log_entry.message: # Case-sensitive keyword match
+            if keyword in log_entry.message:  # Case-sensitive keyword match
                 return {"type": "JavaCrash", "trigger_line": log_entry}
     return None
+
 
 def analyze_anr(log_entry: LogEntry) -> Optional[Dict[str, Any]]:
     """
@@ -308,7 +336,7 @@ def analyze_anr(log_entry: LogEntry) -> Optional[Dict[str, Any]]:
     patterns = ISSUE_PATTERNS["anr"]
     if log_entry.tag in patterns["tags"]:
         for keyword in patterns["message_keywords"]:
-            if keyword in log_entry.message: # Check for "ANR in"
+            if keyword in log_entry.message:  # Check for "ANR in"
                 extracted_data = {"type": "ANR", "trigger_line": log_entry}
                 # Attempt to extract specific details using pre-compiled regexes
                 for key, compiled_regex in patterns["extractors"].items():
@@ -317,10 +345,15 @@ def analyze_anr(log_entry: LogEntry) -> Optional[Dict[str, Any]]:
                         extracted_data[key] = match.group(1).strip()
                     else:
                         # Default values if extraction fails
-                        extracted_data[key] = "Unknown" if key == "process_name" else None
-                
+                        extracted_data[key] = (
+                            "Unknown" if key == "process_name" else None
+                        )
+
                 # Fallback for process_name if the specific regex failed but "ANR in" was present
-                if extracted_data.get("process_name") == "Unknown" or extracted_data.get("process_name") is None:
+                if (
+                    extracted_data.get("process_name") == "Unknown"
+                    or extracted_data.get("process_name") is None
+                ):
                     # A more generic regex to capture the process name after "ANR in "
                     generic_match = re.search(r"ANR in ([^ \(]+)", log_entry.message)
                     if generic_match:
@@ -328,6 +361,7 @@ def analyze_anr(log_entry: LogEntry) -> Optional[Dict[str, Any]]:
                     # If still not found, it remains "Unknown Process" or whatever the default was.
                 return extracted_data
     return None
+
 
 def analyze_native_crash_hint(log_entry: LogEntry) -> Optional[Dict[str, Any]]:
     """
@@ -342,12 +376,19 @@ def analyze_native_crash_hint(log_entry: LogEntry) -> Optional[Dict[str, Any]]:
     patterns = ISSUE_PATTERNS["native_crash_hint"]
     # Native crash indicators can be in specific tags OR identified by message keywords (like "*** ***")
     tag_match = log_entry.tag in patterns["tags"]
-    keyword_match = any(keyword in log_entry.message for keyword in patterns["message_keywords"])
+    keyword_match = any(
+        keyword in log_entry.message for keyword in patterns["message_keywords"]
+    )
 
     if tag_match or keyword_match:
         # The "*** ***" pattern is a strong indicator of a native crash dump start.
         if "*** ***" in patterns["message_keywords"] and "*** ***" in log_entry.message:
-            extracted_data = {"type": "NativeCrashHint", "trigger_line": log_entry, "signal_info": None, "process_info": None}
+            extracted_data = {
+                "type": "NativeCrashHint",
+                "trigger_line": log_entry,
+                "signal_info": None,
+                "process_info": None,
+            }
             # Attempt to extract further details if they are on the same line
             for key, compiled_regex in patterns["extractors"].items():
                 match = compiled_regex.search(log_entry.message)
@@ -357,15 +398,27 @@ def analyze_native_crash_hint(log_entry: LogEntry) -> Optional[Dict[str, Any]]:
 
         # For other keywords (like "Fatal signal") or specific tag matches
         # We expect more specific information (like signal details) to confirm the hint.
-        if any(keyword in log_entry.message for keyword in patterns["message_keywords"] if keyword != "*** ***") or tag_match:
-            extracted_data = {"type": "NativeCrashHint", "trigger_line": log_entry, "signal_info": None, "process_info": None}
+        if (
+            any(
+                keyword in log_entry.message
+                for keyword in patterns["message_keywords"]
+                if keyword != "*** ***"
+            )
+            or tag_match
+        ):
+            extracted_data = {
+                "type": "NativeCrashHint",
+                "trigger_line": log_entry,
+                "signal_info": None,
+                "process_info": None,
+            }
             found_specific_detail = False
             for key, compiled_regex in patterns["extractors"].items():
                 match = compiled_regex.search(log_entry.message)
                 if match:
                     extracted_data[key] = match.group(1).strip()
-                    found_specific_detail = True 
-            
+                    found_specific_detail = True
+
             # Only return if a specific detail (like signal or process info) was actually extracted.
             # This avoids flagging generic lines from DEBUG/libc tags as native crashes without more evidence.
             if found_specific_detail:
@@ -388,17 +441,24 @@ def analyze_system_error(log_entry: LogEntry) -> Optional[Dict[str, Any]]:
         # Check if the log entry's tag matches the ones defined for this error subtype.
         # If `patterns["tags"]` is empty, it implies a generic keyword search across any tag.
         tag_check_passed = False
-        if not patterns["tags"]: 
-            tag_check_passed = True # Match any tag if no specific tags are listed
-        elif log_entry.tag and log_entry.tag.lower() in [tag.lower() for tag in patterns["tags"]]:
-            tag_check_passed = True # Case-insensitive tag comparison
+        if not patterns["tags"]:
+            tag_check_passed = True  # Match any tag if no specific tags are listed
+        elif log_entry.tag and log_entry.tag.lower() in [
+            tag.lower() for tag in patterns["tags"]
+        ]:
+            tag_check_passed = True  # Case-insensitive tag comparison
 
         if tag_check_passed:
             for keyword in patterns["message_keywords"]:
                 # Keyword matching is case-insensitive for system errors.
                 if keyword.lower() in log_entry.message.lower():
-                    return {"type": "SystemError", "error_subtype": error_subtype, "trigger_line": log_entry}
+                    return {
+                        "type": "SystemError",
+                        "error_subtype": error_subtype,
+                        "trigger_line": log_entry,
+                    }
     return None
+
 
 def analyze_memory_issue(log_entry: LogEntry) -> Optional[Dict[str, Any]]:
     """
@@ -411,7 +471,9 @@ def analyze_memory_issue(log_entry: LogEntry) -> Optional[Dict[str, Any]]:
         Dictionary with memory issue details if detected, None otherwise.
     """
     patterns = ISSUE_PATTERNS["memory_issue"]
-    keyword_match = any(k.lower() in log_entry.message.lower() for k in patterns["message_keywords"])
+    keyword_match = any(
+        k.lower() in log_entry.message.lower() for k in patterns["message_keywords"]
+    )
 
     if keyword_match:
         issue = {"type": "MemoryIssue", "trigger_line": log_entry}
@@ -426,9 +488,9 @@ def analyze_memory_issue(log_entry: LogEntry) -> Optional[Dict[str, Any]]:
         return issue
     return None
 
+
 def read_log_file(
-    filepath: Union[str, Path],
-    issue_patterns_config: Optional[Dict[str, Any]] = None
+    filepath: Union[str, Path], issue_patterns_config: Optional[Dict[str, Any]] = None
 ) -> List[Dict[str, Any]]:
     """
     Reads a log file line by line, parses each line into a LogEntry object,
@@ -494,7 +556,9 @@ def read_log_file(
                 except Exception as e:
                     logger.error(f"Error in analyzer {analyzer.__name__}: {e}")
 
-        logger.info(f"Processed {line_count} lines, parsed {parsed_count} entries, found {len(detected_issues)} issues")
+        logger.info(
+            f"Processed {line_count} lines, parsed {parsed_count} entries, found {len(detected_issues)} issues"
+        )
 
     except Exception as e:
         logger.error(f"Error reading file {filepath}: {e}")
@@ -502,9 +566,9 @@ def read_log_file(
 
     return detected_issues
 
+
 def read_logs_from_directory(
-    directory: Union[str, Path],
-    issue_patterns_config: Optional[Dict[str, Any]] = None
+    directory: Union[str, Path], issue_patterns_config: Optional[Dict[str, Any]] = None
 ) -> List[Dict[str, Any]]:
     """
     Recursively read all log files within the specified directory.
@@ -552,6 +616,7 @@ def read_logs_from_directory(
 
     return all_issues
 
+
 def get_structured_report_data(detected_issues: List[Dict[str, Any]]) -> Dict[str, Any]:
     """
     Processes a list of detected issues and returns a structured dictionary.
@@ -563,7 +628,7 @@ def get_structured_report_data(detected_issues: List[Dict[str, Any]]) -> Dict[st
         A dictionary containing 'summary_counts' and 'detailed_issues'.
     """
     summary_counts = Counter(issue["type"] for issue in detected_issues)
-    
+
     detailed_issues_list = []
     for issue_dict in detected_issues:
         # Create a clean representation, converting LogEntry to string
@@ -571,7 +636,7 @@ def get_structured_report_data(detected_issues: List[Dict[str, Any]]) -> Dict[st
             "type": issue_dict.get("type"),
             "trigger_line_str": str(issue_dict.get("trigger_line")),
             # Include other relevant fields, ensuring they are serializable
-            "process_name": issue_dict.get("process_name"), 
+            "process_name": issue_dict.get("process_name"),
             "reason": issue_dict.get("reason"),
             "signal_info": issue_dict.get("signal_info"),
             "process_info": issue_dict.get("process_info"),
@@ -582,15 +647,17 @@ def get_structured_report_data(detected_issues: List[Dict[str, Any]]) -> Dict[st
         # Remove keys with None values for cleaner output, if desired
         clean_issue = {k: v for k, v in clean_issue.items() if v is not None}
         detailed_issues_list.append(clean_issue)
-        
+
     return {
-        "summary_counts": dict(summary_counts), # Convert Counter to dict for broader compatibility
-        "detailed_issues": detailed_issues_list
+        "summary_counts": dict(
+            summary_counts
+        ),  # Convert Counter to dict for broader compatibility
+        "detailed_issues": detailed_issues_list,
     }
 
+
 def save_report_to_json(
-    detected_issues: List[Dict[str, Any]],
-    output_path: Union[str, Path]
+    detected_issues: List[Dict[str, Any]], output_path: Union[str, Path]
 ) -> None:
     """
     Save the structured report data to a JSON file.
@@ -620,6 +687,7 @@ def save_report_to_json(
         logger.error(f"Error saving report to {output_path}: {e}")
         raise
 
+
 def generate_report(detected_issues: List[Dict[str, Any]]) -> None:
     """
     Generates and prints a structured textual report from the list of detected issues,
@@ -635,7 +703,7 @@ def generate_report(detected_issues: List[Dict[str, Any]]) -> None:
     print("\nLog Analysis Report")
     print("===================")
 
-    if not detected_issues: # Or check if not detailed_issues_list
+    if not detected_issues:  # Or check if not detailed_issues_list
         print("No issues detected.")
         print("===================")
         return
@@ -643,7 +711,8 @@ def generate_report(detected_issues: List[Dict[str, Any]]) -> None:
     # --- Summary Section ---
     # Re-calculate system error subtypes for CLI summary, or pass it through get_structured_report_data
     system_error_subtypes_counts = Counter(
-        issue["error_subtype"] for issue in detailed_issues_list 
+        issue["error_subtype"]
+        for issue in detailed_issues_list
         if issue["type"] == "SystemError" and "error_subtype" in issue
     )
 
@@ -653,21 +722,21 @@ def generate_report(detected_issues: List[Dict[str, Any]]) -> None:
     print(f"  Native Crash Hints: {summary_counts.get('NativeCrashHint', 0)}")
     print(f"  System Errors: {summary_counts.get('SystemError', 0)}")
     print(f"  Memory Issues: {summary_counts.get('MemoryIssue', 0)}")
-    if summary_counts.get('SystemError', 0) > 0:
+    if summary_counts.get("SystemError", 0) > 0:
         for subtype, count in sorted(system_error_subtypes_counts.items()):
             print(f"    - {subtype}: {count}")
     print("===================")
-    
+
     # --- Details Section ---
     print("Details:")
 
-    issue_number_tracker = {} 
+    issue_number_tracker = {}
     for issue in detailed_issues_list:
         issue_type = issue["type"]
         issue_number_tracker[issue_type] = issue_number_tracker.get(issue_type, 0) + 1
-        
+
         print(f"\n--- {issue_type} #{issue_number_tracker[issue_type]} ---")
-        
+
         # Print details from the already processed 'issue' dictionary
         print(f"  Trigger: {issue.get('trigger_line_str', 'N/A')}")
         if issue_type == "ANR":
@@ -679,12 +748,12 @@ def generate_report(detected_issues: List[Dict[str, Any]]) -> None:
         elif issue_type == "SystemError":
             print(f"  Subtype: {issue.get('error_subtype', 'N/A')}")
         elif issue_type == "MemoryIssue":
-            if 'killed_process' in issue:
+            if "killed_process" in issue:
                 print(f"  Killed Process: {issue.get('killed_process')}")
-            if 'oom_reason' in issue:
+            if "oom_reason" in issue:
                 print(f"  Reason: {issue.get('oom_reason')}")
         # Other specific fields can be added if needed
-        
+
     print("\n===================")
 
 
@@ -725,13 +794,15 @@ def main(argv: Optional[List[str]] = None) -> None:
     args = parser.parse_args(argv)
 
     # Configure logging level based on verbosity
-    if hasattr(args, 'verbose') and args.verbose:
+    if hasattr(args, "verbose") and args.verbose:
         logging.getLogger().setLevel(logging.DEBUG)
 
     try:
         # Placeholder for platform-specific logic (not yet implemented)
-        logger.info(f"Analyzing for platform '{args.platform}'. "
-                   "(Note: Platform-specific patterns are a future enhancement.)")
+        logger.info(
+            f"Analyzing for platform '{args.platform}'. "
+            "(Note: Platform-specific patterns are a future enhancement.)"
+        )
 
         # Determine if input is directory or file
         input_path = Path(args.logfile)
@@ -740,7 +811,9 @@ def main(argv: Optional[List[str]] = None) -> None:
         elif input_path.is_file():
             detected_issues = read_log_file(input_path, ISSUE_PATTERNS)
         else:
-            logger.error(f"Input path does not exist or is not accessible: {input_path}")
+            logger.error(
+                f"Input path does not exist or is not accessible: {input_path}"
+            )
             return
 
         # Save JSON report if requested
@@ -764,7 +837,10 @@ def main(argv: Optional[List[str]] = None) -> None:
 
 # Intelligent Features Integration
 
-def smart_search_logs(query: str, log_files: List[Union[str, Path]], max_results: int = 50) -> List[Dict[str, Any]]:
+
+def smart_search_logs(
+    query: str, log_files: List[Union[str, Path]], max_results: int = 50
+) -> List[Dict[str, Any]]:
     """
     Perform intelligent search across multiple log files
 
@@ -796,12 +872,12 @@ def smart_search_logs(query: str, log_files: List[Union[str, Path]], max_results
             # Add file information to results
             for result in results:
                 result_dict = {
-                    'file': str(log_file),
-                    'line_number': result.line_number,
-                    'content': result.content,
-                    'relevance_score': result.relevance_score,
-                    'match_type': result.match_type.value,
-                    'highlights': result.highlights
+                    "file": str(log_file),
+                    "line_number": result.line_number,
+                    "content": result.content,
+                    "relevance_score": result.relevance_score,
+                    "match_type": result.match_type.value,
+                    "highlights": result.highlights,
                 }
                 all_results.append(result_dict)
 
@@ -809,11 +885,13 @@ def smart_search_logs(query: str, log_files: List[Union[str, Path]], max_results
             logger.error(f"Error searching in {log_file}: {e}")
 
     # Sort by relevance score
-    all_results.sort(key=lambda x: x['relevance_score'], reverse=True)
+    all_results.sort(key=lambda x: x["relevance_score"], reverse=True)
     return all_results[:max_results]
 
 
-def basic_search_logs(query: str, log_files: List[Union[str, Path]], max_results: int = 50) -> List[Dict[str, Any]]:
+def basic_search_logs(
+    query: str, log_files: List[Union[str, Path]], max_results: int = 50
+) -> List[Dict[str, Any]]:
     """
     Basic search functionality when intelligent features are not available
     """
@@ -824,14 +902,16 @@ def basic_search_logs(query: str, log_files: List[Union[str, Path]], max_results
         try:
             for line_number, line in enumerate(iter_log_lines(log_file), 1):
                 if query_lower in line.lower():
-                    results.append({
-                        'file': str(log_file),
-                        'line_number': line_number,
-                        'content': line,
-                        'relevance_score': 1.0,
-                        'match_type': 'basic',
-                        'highlights': []
-                    })
+                    results.append(
+                        {
+                            "file": str(log_file),
+                            "line_number": line_number,
+                            "content": line,
+                            "relevance_score": 1.0,
+                            "match_type": "basic",
+                            "highlights": [],
+                        }
+                    )
 
                     if len(results) >= max_results:
                         break
@@ -842,7 +922,9 @@ def basic_search_logs(query: str, log_files: List[Union[str, Path]], max_results
     return results
 
 
-def prioritize_issues(issues: List[Dict[str, Any]], context: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+def prioritize_issues(
+    issues: List[Dict[str, Any]], context: Optional[Dict[str, Any]] = None
+) -> List[Dict[str, Any]]:
     """
     Add intelligent priority scoring to detected issues
 
@@ -854,7 +936,9 @@ def prioritize_issues(issues: List[Dict[str, Any]], context: Optional[Dict[str, 
         Issues with priority information added
     """
     if not INTELLIGENT_FEATURES_AVAILABLE:
-        logger.warning("Intelligent features not available. Using basic prioritization.")
+        logger.warning(
+            "Intelligent features not available. Using basic prioritization."
+        )
         return basic_prioritize_issues(issues)
 
     scorer = IssuePriorityScorer()
@@ -863,9 +947,9 @@ def prioritize_issues(issues: List[Dict[str, Any]], context: Optional[Dict[str, 
     issue_context = None
     if context:
         issue_context = IssueContext(
-            app_version=context.get('app_version'),
-            user_count_affected=context.get('user_count_affected', 0),
-            release_stage=context.get('release_stage', 'production')
+            app_version=context.get("app_version"),
+            user_count_affected=context.get("user_count_affected", 0),
+            release_stage=context.get("release_stage", "production"),
         )
 
     prioritized_issues = []
@@ -874,11 +958,11 @@ def prioritize_issues(issues: List[Dict[str, Any]], context: Optional[Dict[str, 
         try:
             # Convert issue to format expected by priority scorer
             issue_data = {
-                'type': issue.get('type', 'unknown').lower(),
-                'severity': _determine_severity(issue),
-                'frequency': 1,  # Default frequency, could be enhanced
-                'component': _determine_component(issue),
-                'message': _get_issue_message(issue)
+                "type": issue.get("type", "unknown").lower(),
+                "severity": _determine_severity(issue),
+                "frequency": 1,  # Default frequency, could be enhanced
+                "component": _determine_component(issue),
+                "message": _get_issue_message(issue),
             }
 
             # Calculate priority
@@ -892,20 +976,28 @@ def prioritize_issues(issues: List[Dict[str, Any]], context: Optional[Dict[str, 
 
         except Exception as e:
             logger.error(f"Error prioritizing issue: {e}")
-            prioritized_issues.append(issue)  # Add original issue if prioritization fails
+            prioritized_issues.append(
+                issue
+            )  # Add original issue if prioritization fails
 
     # Sort by priority score
-    prioritized_issues.sort(key=lambda x: x.get('total_score', 0), reverse=True)
+    prioritized_issues.sort(key=lambda x: x.get("total_score", 0), reverse=True)
 
     return prioritized_issues
 
 
 def basic_prioritize_issues(issues: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """Basic prioritization when intelligent features are not available"""
-    priority_order = ['JavaCrash', 'NativeCrashHint', 'ANR', 'SystemError', 'MemoryIssue']
+    priority_order = [
+        "JavaCrash",
+        "NativeCrashHint",
+        "ANR",
+        "SystemError",
+        "MemoryIssue",
+    ]
 
     def get_priority_score(issue):
-        issue_type = issue.get('type', 'Unknown')
+        issue_type = issue.get("type", "Unknown")
         try:
             return len(priority_order) - priority_order.index(issue_type)
         except ValueError:
@@ -916,44 +1008,44 @@ def basic_prioritize_issues(issues: List[Dict[str, Any]]) -> List[Dict[str, Any]
 
 def _determine_severity(issue: Dict[str, Any]) -> str:
     """Determine severity based on issue type"""
-    issue_type = issue.get('type', '').lower()
+    issue_type = issue.get("type", "").lower()
 
     severity_mapping = {
-        'javacrash': 'critical',
-        'nativecrashint': 'critical',
-        'anr': 'high',
-        'systemerror': 'high',
-        'memoryissue': 'medium'
+        "javacrash": "critical",
+        "nativecrashint": "critical",
+        "anr": "high",
+        "systemerror": "high",
+        "memoryissue": "medium",
     }
 
-    return severity_mapping.get(issue_type, 'medium')
+    return severity_mapping.get(issue_type, "medium")
 
 
 def _determine_component(issue: Dict[str, Any]) -> str:
     """Determine component based on issue details"""
-    trigger_line = issue.get('trigger_line')
-    if trigger_line and hasattr(trigger_line, 'tag'):
+    trigger_line = issue.get("trigger_line")
+    if trigger_line and hasattr(trigger_line, "tag"):
         tag = trigger_line.tag.lower()
 
-        if 'system' in tag:
-            return 'system_server'
-        elif 'activity' in tag:
-            return 'activity'
-        elif 'service' in tag:
-            return 'service'
+        if "system" in tag:
+            return "system_server"
+        elif "activity" in tag:
+            return "activity"
+        elif "service" in tag:
+            return "service"
         else:
-            return 'application'
+            return "application"
 
-    return 'unknown'
+    return "unknown"
 
 
 def _get_issue_message(issue: Dict[str, Any]) -> str:
     """Extract message from issue"""
-    trigger_line = issue.get('trigger_line')
-    if trigger_line and hasattr(trigger_line, 'message'):
+    trigger_line = issue.get("trigger_line")
+    if trigger_line and hasattr(trigger_line, "message"):
         return trigger_line.message
 
-    return issue.get('type', 'Unknown issue')
+    return issue.get("type", "Unknown issue")
 
 
 def analyze_with_ml(log_lines: List[str]) -> Dict[str, Any]:
@@ -968,89 +1060,104 @@ def analyze_with_ml(log_lines: List[str]) -> Dict[str, Any]:
     """
     if not ML_FEATURES_AVAILABLE:
         logger.warning("ML features not available for enhanced analysis")
-        return {'ml_available': False}
+        return {"ml_available": False}
 
     try:
         # Create ML analyzer
         ml_analyzer = create_ml_analyzer()
 
         results = {
-            'ml_available': True,
-            'crash_classifications': [],
-            'anomalies': [],
-            'patterns': [],
-            'ml_insights': {}
+            "ml_available": True,
+            "crash_classifications": [],
+            "anomalies": [],
+            "patterns": [],
+            "ml_insights": {},
         }
 
         # Crash classification
-        if 'crash_classifier' in ml_analyzer:
-            classifier = ml_analyzer['crash_classifier']
+        if "crash_classifier" in ml_analyzer:
+            classifier = ml_analyzer["crash_classifier"]
 
             # Find potential crash lines
-            crash_lines = [line for line in log_lines
-                          if any(keyword in line.lower()
-                                for keyword in ['exception', 'fatal', 'crash', 'abort'])]
+            crash_lines = [
+                line
+                for line in log_lines
+                if any(
+                    keyword in line.lower()
+                    for keyword in ["exception", "fatal", "crash", "abort"]
+                )
+            ]
 
             for crash_line in crash_lines[:10]:  # Limit to first 10 crashes
                 prediction = classifier.classify_crash(crash_line)
-                results['crash_classifications'].append({
-                    'line': crash_line,
-                    'prediction': {
-                        'crash_type': prediction.crash_type,
-                        'confidence': prediction.confidence,
-                        'severity': prediction.severity,
-                        'description': prediction.description,
-                        'recommendations': prediction.recommendations
+                results["crash_classifications"].append(
+                    {
+                        "line": crash_line,
+                        "prediction": {
+                            "crash_type": prediction.crash_type,
+                            "confidence": prediction.confidence,
+                            "severity": prediction.severity,
+                            "description": prediction.description,
+                            "recommendations": prediction.recommendations,
+                        },
                     }
-                })
+                )
 
         # Anomaly detection
-        if 'anomaly_detector' in ml_analyzer:
-            detector = ml_analyzer['anomaly_detector']
+        if "anomaly_detector" in ml_analyzer:
+            detector = ml_analyzer["anomaly_detector"]
             anomalies = detector.detect_anomalies(log_lines)
 
             for anomaly in anomalies:
-                results['anomalies'].append({
-                    'is_anomaly': anomaly.is_anomaly,
-                    'score': anomaly.anomaly_score,
-                    'type': anomaly.anomaly_type,
-                    'description': anomaly.description,
-                    'severity': anomaly.severity,
-                    'recommendations': anomaly.recommendations
-                })
+                results["anomalies"].append(
+                    {
+                        "is_anomaly": anomaly.is_anomaly,
+                        "score": anomaly.anomaly_score,
+                        "type": anomaly.anomaly_type,
+                        "description": anomaly.description,
+                        "severity": anomaly.severity,
+                        "recommendations": anomaly.recommendations,
+                    }
+                )
 
         # Pattern recognition
-        if 'pattern_recognizer' in ml_analyzer:
-            recognizer = ml_analyzer['pattern_recognizer']
+        if "pattern_recognizer" in ml_analyzer:
+            recognizer = ml_analyzer["pattern_recognizer"]
             patterns = recognizer.recognize_patterns(log_lines)
 
             for pattern in patterns:
-                results['patterns'].append({
-                    'pattern_id': pattern.pattern_id,
-                    'type': pattern.pattern_type,
-                    'description': pattern.description,
-                    'frequency': pattern.frequency,
-                    'confidence': pattern.confidence,
-                    'severity': pattern.severity,
-                    'examples': pattern.examples,
-                    'recommendations': pattern.recommendations
-                })
+                results["patterns"].append(
+                    {
+                        "pattern_id": pattern.pattern_id,
+                        "type": pattern.pattern_type,
+                        "description": pattern.description,
+                        "frequency": pattern.frequency,
+                        "confidence": pattern.confidence,
+                        "severity": pattern.severity,
+                        "examples": pattern.examples,
+                        "recommendations": pattern.recommendations,
+                    }
+                )
 
             # Get pattern statistics
             if patterns:
-                results['ml_insights']['pattern_stats'] = recognizer.get_pattern_statistics(patterns)
+                results["ml_insights"]["pattern_stats"] = (
+                    recognizer.get_pattern_statistics(patterns)
+                )
 
         # Generate ML insights
-        results['ml_insights'].update(_generate_ml_insights(results))
+        results["ml_insights"].update(_generate_ml_insights(results))
 
-        logger.info(f"ML analysis completed: {len(results['crash_classifications'])} crashes, "
-                   f"{len(results['anomalies'])} anomalies, {len(results['patterns'])} patterns")
+        logger.info(
+            f"ML analysis completed: {len(results['crash_classifications'])} crashes, "
+            f"{len(results['anomalies'])} anomalies, {len(results['patterns'])} patterns"
+        )
 
         return results
 
     except Exception as e:
         logger.error(f"ML analysis failed: {e}")
-        return {'ml_available': False, 'error': str(e)}
+        return {"ml_available": False, "error": str(e)}
 
 
 def _generate_ml_insights(ml_results: Dict[str, Any]) -> Dict[str, Any]:
@@ -1058,54 +1165,66 @@ def _generate_ml_insights(ml_results: Dict[str, Any]) -> Dict[str, Any]:
     insights = {}
 
     # Crash insights
-    crashes = ml_results.get('crash_classifications', [])
+    crashes = ml_results.get("crash_classifications", [])
     if crashes:
-        crash_types = [c['prediction']['crash_type'] for c in crashes]
-        crash_severities = [c['prediction']['severity'] for c in crashes]
+        crash_types = [c["prediction"]["crash_type"] for c in crashes]
+        crash_severities = [c["prediction"]["severity"] for c in crashes]
 
-        insights['crash_insights'] = {
-            'total_crashes': len(crashes),
-            'most_common_type': max(set(crash_types), key=crash_types.count) if crash_types else None,
-            'critical_crashes': sum(1 for s in crash_severities if s == 'critical'),
-            'avg_confidence': sum(c['prediction']['confidence'] for c in crashes) / len(crashes)
+        insights["crash_insights"] = {
+            "total_crashes": len(crashes),
+            "most_common_type": (
+                max(set(crash_types), key=crash_types.count) if crash_types else None
+            ),
+            "critical_crashes": sum(1 for s in crash_severities if s == "critical"),
+            "avg_confidence": sum(c["prediction"]["confidence"] for c in crashes)
+            / len(crashes),
         }
 
     # Anomaly insights
-    anomalies = ml_results.get('anomalies', [])
+    anomalies = ml_results.get("anomalies", [])
     if anomalies:
-        anomaly_types = [a['type'] for a in anomalies]
-        anomaly_severities = [a['severity'] for a in anomalies]
+        anomaly_types = [a["type"] for a in anomalies]
+        anomaly_severities = [a["severity"] for a in anomalies]
 
-        insights['anomaly_insights'] = {
-            'total_anomalies': len(anomalies),
-            'most_common_type': max(set(anomaly_types), key=anomaly_types.count) if anomaly_types else None,
-            'critical_anomalies': sum(1 for s in anomaly_severities if s == 'critical'),
-            'avg_score': sum(a['score'] for a in anomalies) / len(anomalies)
+        insights["anomaly_insights"] = {
+            "total_anomalies": len(anomalies),
+            "most_common_type": (
+                max(set(anomaly_types), key=anomaly_types.count)
+                if anomaly_types
+                else None
+            ),
+            "critical_anomalies": sum(1 for s in anomaly_severities if s == "critical"),
+            "avg_score": sum(a["score"] for a in anomalies) / len(anomalies),
         }
 
     # Pattern insights
-    patterns = ml_results.get('patterns', [])
+    patterns = ml_results.get("patterns", [])
     if patterns:
-        pattern_types = [p['type'] for p in patterns]
-        pattern_severities = [p['severity'] for p in patterns]
+        pattern_types = [p["type"] for p in patterns]
+        pattern_severities = [p["severity"] for p in patterns]
 
-        insights['pattern_insights'] = {
-            'total_patterns': len(patterns),
-            'most_common_type': max(set(pattern_types), key=pattern_types.count) if pattern_types else None,
-            'high_frequency_patterns': sum(1 for p in patterns if p['frequency'] > 5),
-            'avg_confidence': sum(p['confidence'] for p in patterns) / len(patterns)
+        insights["pattern_insights"] = {
+            "total_patterns": len(patterns),
+            "most_common_type": (
+                max(set(pattern_types), key=pattern_types.count)
+                if pattern_types
+                else None
+            ),
+            "high_frequency_patterns": sum(1 for p in patterns if p["frequency"] > 5),
+            "avg_confidence": sum(p["confidence"] for p in patterns) / len(patterns),
         }
 
     # Overall health score
     total_issues = len(crashes) + len(anomalies) + len(patterns)
-    critical_issues = (insights.get('crash_insights', {}).get('critical_crashes', 0) +
-                      insights.get('anomaly_insights', {}).get('critical_anomalies', 0))
+    critical_issues = insights.get("crash_insights", {}).get(
+        "critical_crashes", 0
+    ) + insights.get("anomaly_insights", {}).get("critical_anomalies", 0)
 
     if total_issues > 0:
         health_score = max(0, 100 - (critical_issues * 20) - (total_issues * 2))
-        insights['health_score'] = min(100, health_score)
+        insights["health_score"] = min(100, health_score)
     else:
-        insights['health_score'] = 100
+        insights["health_score"] = 100
 
     return insights
 
@@ -1134,19 +1253,19 @@ def get_ml_enhanced_report(log_file_path: Union[str, Path]) -> Dict[str, Any]:
 
         # Combine results
         enhanced_report = {
-            'file_path': str(log_file_path),
-            'total_lines': len(log_lines),
-            'standard_analysis': {
-                'issues': standard_issues,
-                'issue_count': len(standard_issues)
+            "file_path": str(log_file_path),
+            "total_lines": len(log_lines),
+            "standard_analysis": {
+                "issues": standard_issues,
+                "issue_count": len(standard_issues),
             },
-            'ml_analysis': ml_results,
-            'enhanced_insights': {}
+            "ml_analysis": ml_results,
+            "enhanced_insights": {},
         }
 
         # Generate enhanced insights
-        if ml_results.get('ml_available'):
-            enhanced_report['enhanced_insights'] = _combine_standard_and_ml_insights(
+        if ml_results.get("ml_available"):
+            enhanced_report["enhanced_insights"] = _combine_standard_and_ml_insights(
                 standard_issues, ml_results
             )
 
@@ -1154,45 +1273,54 @@ def get_ml_enhanced_report(log_file_path: Union[str, Path]) -> Dict[str, Any]:
 
     except Exception as e:
         logger.error(f"Enhanced analysis failed: {e}")
-        return {'error': str(e)}
+        return {"error": str(e)}
 
 
-def _combine_standard_and_ml_insights(standard_issues: List[Dict[str, Any]],
-                                    ml_results: Dict[str, Any]) -> Dict[str, Any]:
+def _combine_standard_and_ml_insights(
+    standard_issues: List[Dict[str, Any]], ml_results: Dict[str, Any]
+) -> Dict[str, Any]:
     """Combine insights from standard and ML analysis"""
     insights = {
-        'analysis_summary': {
-            'standard_issues': len(standard_issues),
-            'ml_crashes': len(ml_results.get('crash_classifications', [])),
-            'ml_anomalies': len(ml_results.get('anomalies', [])),
-            'ml_patterns': len(ml_results.get('patterns', []))
+        "analysis_summary": {
+            "standard_issues": len(standard_issues),
+            "ml_crashes": len(ml_results.get("crash_classifications", [])),
+            "ml_anomalies": len(ml_results.get("anomalies", [])),
+            "ml_patterns": len(ml_results.get("patterns", [])),
         }
     }
 
     # Cross-reference standard issues with ML classifications
-    ml_crashes = ml_results.get('crash_classifications', [])
+    ml_crashes = ml_results.get("crash_classifications", [])
     if standard_issues and ml_crashes:
-        insights['correlation'] = {
-            'standard_vs_ml_crashes': {
-                'standard_count': len([i for i in standard_issues if 'crash' in i.get('type', '').lower()]),
-                'ml_count': len(ml_crashes),
-                'correlation_score': min(1.0, len(ml_crashes) / max(len(standard_issues), 1))
+        insights["correlation"] = {
+            "standard_vs_ml_crashes": {
+                "standard_count": len(
+                    [i for i in standard_issues if "crash" in i.get("type", "").lower()]
+                ),
+                "ml_count": len(ml_crashes),
+                "correlation_score": min(
+                    1.0, len(ml_crashes) / max(len(standard_issues), 1)
+                ),
             }
         }
 
     # Priority recommendations based on combined analysis
     recommendations = []
 
-    if ml_results.get('ml_insights', {}).get('health_score', 100) < 70:
-        recommendations.append("System health score is low - immediate attention required")
+    if ml_results.get("ml_insights", {}).get("health_score", 100) < 70:
+        recommendations.append(
+            "System health score is low - immediate attention required"
+        )
 
-    if len(ml_results.get('anomalies', [])) > 5:
-        recommendations.append("Multiple anomalies detected - investigate system stability")
+    if len(ml_results.get("anomalies", [])) > 5:
+        recommendations.append(
+            "Multiple anomalies detected - investigate system stability"
+        )
 
-    if len(ml_results.get('patterns', [])) > 10:
+    if len(ml_results.get("patterns", [])) > 10:
         recommendations.append("Many recurring patterns found - consider optimization")
 
-    insights['recommendations'] = recommendations
+    insights["recommendations"] = recommendations
 
     return insights
 

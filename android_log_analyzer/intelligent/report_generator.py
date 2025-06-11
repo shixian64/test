@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class ReportConfig:
     """Configuration for report generation"""
+
     include_executive_summary: bool = True
     include_technical_details: bool = True
     format: str = "markdown"
@@ -26,42 +27,44 @@ class ReportConfig:
 
 class IntelligentReportGenerator:
     """Generates comprehensive analysis reports"""
-    
+
     def __init__(self, config: Optional[ReportConfig] = None):
         self.config = config or ReportConfig()
-    
+
     def generate_comprehensive_report(self, analysis_data: Dict[str, Any]) -> str:
         """Generate a comprehensive analysis report"""
-        
+
         report_sections = []
-        
+
         # Title
         report_sections.append("# Android Log Analysis Report")
-        report_sections.append(f"**Generated**: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        report_sections.append(
+            f"**Generated**: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+        )
         report_sections.append("")
-        
+
         # Overview
         report_sections.append(self._generate_overview(analysis_data))
         report_sections.append("")
-        
+
         # Key metrics
         report_sections.append(self._generate_key_metrics(analysis_data))
         report_sections.append("")
-        
+
         # Critical issues
         report_sections.append(self._generate_critical_issues(analysis_data))
         report_sections.append("")
-        
+
         # Recommendations
         report_sections.append(self._generate_recommendations(analysis_data))
-        
+
         return "\n".join(report_sections)
-    
+
     def _generate_overview(self, data: Dict[str, Any]) -> str:
         """Generate overview section"""
-        package_info = data.get('package_info', {})
-        summary = data.get('summary', {})
-        
+        package_info = data.get("package_info", {})
+        summary = data.get("summary", {})
+
         return f"""## 📊 Analysis Overview
 
 **Package Information:**
@@ -73,7 +76,7 @@ class IntelligentReportGenerator:
 - Total Issues: {summary.get('total_issues', 0)}
 - Critical Issues: {summary.get('critical_issues', 0)}
 """
-    
+
     def _generate_key_metrics(self, data: Dict[str, Any]) -> str:
         """Generate key metrics section"""
         return """## 🎯 Key Metrics
@@ -85,21 +88,21 @@ class IntelligentReportGenerator:
 | **Memory Issues** | 8 | 🟡 Warning |
 | **Performance Issues** | 12 | 🔴 Critical |
 """
-    
+
     def _generate_critical_issues(self, data: Dict[str, Any]) -> str:
         """Generate critical issues section"""
-        critical_issues = data.get('critical_issues', [])
-        
+        critical_issues = data.get("critical_issues", [])
+
         if not critical_issues:
             return """## 🎉 Critical Issues
 
 **Great news!** No critical issues were detected.
 """
-        
+
         section = f"""## 🚨 Critical Issues ({len(critical_issues)} found)
 
 """
-        
+
         for i, issue in enumerate(critical_issues[:3], 1):
             section += f"""### {i}. {issue.get('type', 'Unknown').title()}
 
@@ -109,9 +112,9 @@ class IntelligentReportGenerator:
 
 ---
 """
-        
+
         return section
-    
+
     def _generate_recommendations(self, data: Dict[str, Any]) -> str:
         """Generate recommendations section"""
         return """## 💡 Recommendations
